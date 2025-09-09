@@ -12,8 +12,8 @@
 // static int  c[1024*1024] __attribute__((aligned(256)));
 
 // val TaskTypeTensorLoad = 2.U(TypeBitWidth.W)
-// val TaskTypeTensorZeroLoad = 3.U(TypeBitWidth.W) //直接将数据填充为0，实际上是什么也没做，默认可以写入SRAM，无视以前SRAM里面的数据即可
-// val TaskTypeTensorRepeatRowLoad = 4.U(TypeBitWidth.W) //重复加载一行数据，实际上是什么也没做，默认可以写入SRAM，无视以前SRAM里面的数据即可
+// val TaskTypeTensorZeroLoad = 3.U(TypeBitWidth.W) //直接将数据填充为0，实际上一直写SRAM，全0的值
+// val TaskTypeTensorRepeatRowLoad = 4.U(TypeBitWidth.W) //重复加载一行数据，实际上是只读取了一行，然后一直反复写SRAM
 
 //                                                   
 //AML的总load请求数量 = 每次load请求数量 * Tensor_K * Taskctrl拆分的任务次数 =  (49) * 2 * 256 = 25088[A_LOAD]

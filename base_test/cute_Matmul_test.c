@@ -12,8 +12,8 @@
 // static int  c[1024*1024] __attribute__((aligned(256)));
 
 // val TaskTypeTensorLoad = 2.U(TypeBitWidth.W)
-// val TaskTypeTensorZeroLoad = 3.U(TypeBitWidth.W) //直接将数据填充为0，实际上是什么也没做，默认可以写入SRAM，无视以前SRAM里面的数据即可
-// val TaskTypeTensorRepeatRowLoad = 4.U(TypeBitWidth.W) //重复加载一行数据，实际上是什么也没做，默认可以写入SRAM，无视以前SRAM里面的数据即可
+// val TaskTypeTensorZeroLoad = 3.U(TypeBitWidth.W) //直接将数据填充为0，实际上一直写SRAM，全0的值
+// val TaskTypeTensorRepeatRowLoad = 4.U(TypeBitWidth.W) //重复加载一行数据，实际上是只读取了一行，然后一直反复写SRAM
 
 //让C[0][0~3] = 0,C[0][4~7] = 1, C[0][8~11] = 2, C[0][12~15] = 3, C[0][16~19] = 4, C[0][20~23] = 5, C[0][24~27] = 6, C[0][28~31] = 7,C[0][32~35] = 8, C[0][36~39] = 9, C[0][40~43] = 10, C[0][44~47] = 11, C[0][48~51] = 12, C[0][52~55] = 13, C[0][56~59] = 14, C[0][60~63] = 15
 void m_c_init()
