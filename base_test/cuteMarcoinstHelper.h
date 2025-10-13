@@ -15,6 +15,15 @@
 //               配置加速器，cfgData2 = (kernel_size[0~7bit]，conv_oh_per_add[16~25]，conv_ow_per_add[26~35]， conv_oh_index[36~45bit],conv_oh_index[46~55bit])
 //val conv_oh_per_add //避免在计算过程中进行除法运算，这里可以提前计算好
 //val conv_ow_per_add //避免在计算过程中进行取余运算，这里可以提前计算好
+#define CUTEDataTypeI8I8I32     0     //I8 * I8 * I32
+#define CUTEDataTypeF16F16F32   1     //FP16 * FP16 * FP32
+#define CUTEDataTypeBF16BF16F32 2     //BF16 * BF16 * FP32
+#define CUTEDataTypeTF32TF32F32 3     //TF32 * TF32 * FP32
+#define CUTEDataTypeI8U8I32     4     //I8 * UI8 * I32
+#define CUTEDataTypeU8I8I32     5     //U8 * I8 * I32
+#define CUTEDataTypeU8U8I32     6     //U8 * U8 * I32
+#define CUTEDataTypee4m3F32     7
+
 
 // int issue_Matmul_Marco_Inst()
 #define TaskTypeTensorLoad  3
@@ -115,8 +124,8 @@ void issue_cute_config_MatMul(uint64_t element_type,uint64_t bias_type,uint64_t 
     bias_type = bias_type & 0xFF;
     transpose_result = transpose_result & 0xFF;
     uint64_t conv_stride = 1;
-    uint64_t conv_oh_max = 1;
-    uint64_t conv_ow_max = 16384;//默认最大N
+    uint64_t conv_oh_max = 0;
+    uint64_t conv_ow_max = 0;//默认最大N
     uint64_t kernel_size = 1;
     uint64_t conv_oh_per_add = 0;
     uint64_t conv_ow_per_add = Tensor_M_Element_Length;//

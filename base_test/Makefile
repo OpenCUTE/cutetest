@@ -2,7 +2,7 @@
 # RISCV Toolchain
 #################################
 
-PREFIX = riscv64-unknown-elf-
+PREFIX = /opt/autovec-baremetal-rvv/bin/riscv64-unknown-elf-
 
 GCC = $(PREFIX)gcc
 CXX = $(PREFIX)g++
@@ -19,7 +19,7 @@ sysroot = $(shell $(GCC) -print-sysroot)
 #################################
 
 # SoC Settings
-ARCH = rv64imafdc
+ARCH = rv64imafdcv
 ABI = lp64d
 ARCHFLAGS = -march=$(ARCH) -mabi=$(ABI)
 
@@ -38,7 +38,7 @@ LDFLAGS += -specs=$(libgloss_specs)
         #    streaming-passthrough streaming-fir nvdla spiflashread spiflashwrite fft gcd \
         #    hello mt-hello 8
 # PROGRAMS = conv_MMA_padding_scalar_10  conv_MMA_padding_scalar_23 conv_MMA_padding_scalar_11  conv_MMA_padding_scalar_3 conv_MMA_padding_scalar_12  conv_MMA_padding_scalar_4 conv_MMA_padding_scalar_13  conv_MMA_padding_scalar_5 conv_MMA_padding_scalar_14  conv_MMA_padding_scalar_6 conv_MMA_padding_scalar_15  conv_MMA_padding_scalar_7 conv_MMA_padding_scalar_16  conv_MMA_padding_scalar_8 conv_MMA_padding_scalar_17  conv_MMA_padding_scalar_9 conv_MMA_padding_scalar_18  conv_MMA_padding_scalar_19  conv_MMA_padding_scalar_2   conv_MMA_padding_scalar_20  conv_MMA_padding_scalar_21  conv_MMA_padding_scalar_1     conv_MMA_padding_scalar_22
-PROGRAMS = cutehello cute_Matmul_mnk_50176_64_192 cute_conv_mnk_49_512_512_k3_s1_oh7 cute_conv_mnk_49_512_512_k3_s2_oh7 cute_conv_mnk_49_2048_512_k1_s1_oh7 cute_conv_mnk_49_2048_1024_k1_s2_oh7 cute_Matmul_mnk_128_128_128_zeroinit cute_Matmul_mnk_128_128_128_fullbias cute_Matmul_mnk_128_128_128_rowreapeat cute_Matmul_mnk_113_128_128_fullbias  cute_Matmul_mnk_113_128_128_rowreapeat  cute_Matmul_mnk_113_128_128_zeroinit cute_Matmul_mnk_128_128_128_zeroinit_transpose cute_tma_tcm_cute_vector_test
+PROGRAMS = cutehello cute_Matmul_mnk_128_128_128_zeroinit
 
 .DEFAULT_GOAL := default
 
