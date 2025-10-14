@@ -55,7 +55,7 @@ static inline float fast_sqrt(float x) {
     __asm__ volatile ("fsqrt.s %0, %1" : "=f"(result) : "f"(x));
     return result;
 }
-typedef __int16_t float16_t;
+// typedef __int16_t _Float16;
 
 static float rope_theta[KEY_DIMENSION/2] __attribute__((aligned(64))) = {1.0000e+00, 6.6360e-01, 4.4037e-01, 2.9223e-01, 1.9392e-01, 1.2869e-01,
         8.5397e-02, 5.6670e-02, 3.7606e-02, 2.4955e-02, 1.6560e-02, 1.0990e-02,
@@ -89,11 +89,11 @@ static float  ffn_down_scale[1] = {0};
 static int8_t hidden_states_buf_q8_after_pre_rmsnorm[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static float  hidden_states_buf_q8_after_pre_rmsnorm_scale[SEQ_LEN] = {0};
 
-static float16_t  proj_q_buf_q16[SEQ_LEN][N_HEAD_Q][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
-static float16_t  proj_k_buf_q16[SEQ_LEN][N_HEAD_KV][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
-static float16_t  proj_v_buf_q16[SEQ_LEN][N_HEAD_KV][VALUE_DIMENSION] __attribute__((aligned(64))) = {0};
+static _Float16  proj_q_buf_q16[SEQ_LEN][N_HEAD_Q][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
+static _Float16  proj_k_buf_q16[SEQ_LEN][N_HEAD_KV][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
+static _Float16  proj_v_buf_q16[SEQ_LEN][N_HEAD_KV][VALUE_DIMENSION] __attribute__((aligned(64))) = {0};
 
-static float16_t  scores_buf_q16[N_HEAD_Q][SEQ_LEN][SEQ_LEN] __attribute__((aligned(64))) = {0};
+static _Float16  scores_buf_q16[N_HEAD_Q][SEQ_LEN][SEQ_LEN] __attribute__((aligned(64))) = {0};
 
 static int8_t attn_buf_q8[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static float  attn_buf_q8_scale[SEQ_LEN] = {0};
@@ -223,7 +223,7 @@ void fuse_ops_DEQUANT_ROPE_BF16CVRT(void * input,void *output,void * input_scale
         int input_offset = j * input_stride;
         int output_offset = j * output_stride;
         int32_t* input_row = (int32_t*)(input + input_offset);
-        float16_t* output_row = (float16_t*)(output + output_offset);
+        _Float16* output_row = (_Float16*)(output + output_offset);
         size_t avl, vl;
         float_t scale = input_scale_f32[j] * weight_scale_f32[0];
         // 处理每两个元素（实部和虚部）
@@ -277,7 +277,7 @@ void fuse_ops_DEQUANT_BF16CVRT(void * input,void *output,void * input_scale,void
     //input scale  is per token scale
     //weight scale is per tensor scale
     int32_t* input_i32 = (int32_t*)input;
-    float16_t* output_f16 = (float16_t*)output;
+    _Float16* output_f16 = (_Float16*)output;
     float_t * input_scale_f32 = (float_t *)input_scale;
     float_t * weight_scale_f32 = (float_t *)weight_scale;
 
@@ -292,7 +292,7 @@ void fuse_ops_DEQUANT_BF16CVRT(void * input,void *output,void * input_scale,void
         int input_offset = j * input_stride;
         int output_offset = j * output_stride;
         int32_t* input_row = (int32_t*)(input + input_offset);
-        float16_t* output_row = (float16_t*)(output + output_offset);
+        _Float16* output_row = (_Float16*)(output + output_offset);
 
         vl = __riscv_vsetvl_e32m4(avl);
         for (int k = 0, avl = headdim, vl = 0; avl > 0; k += vl, avl -= vl) {
@@ -373,7 +373,7 @@ inline void softmax_cvrtfp16(void* x, void* y, void* bitmask_ptr, int M, int N,u
         int input_offset = i * input_stride;
         int output_offset = i * output_stride;
         float_t* input_row_f32 = (float_t*)(x + input_offset);
-        float16_t* output_row_f16 = (float16_t*)(y + output_offset);
+        _Float16* output_row_f16 = (_Float16*)(y + output_offset);
 
         size_t avl, vl;
         size_t vl_0 = __riscv_vsetvl_e32m4(N);
@@ -424,7 +424,7 @@ inline void softmax_cvrtfp16(void* x, void* y, void* bitmask_ptr, int M, int N,u
             vfloat32m4_t vec = __riscv_vle32_v_f32m4(&input_row_f32[j], vl);
             vfloat32m4_t normalized = __riscv_vfmul_vv_f32m4(vec, inv_sum_exp_vec, vl);
             vfloat16m2_t normalized_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(normalized, vl);
-            __riscv_vse16_v_f16m2((float16_t*)&output_row_f16[j], normalized_fp16, vl);
+            __riscv_vse16_v_f16m2((_Float16*)&output_row_f16[j], normalized_fp16, vl);
         }
     }
   
@@ -439,7 +439,7 @@ void fuse_ops_MASKED_SOFTMAX_KVSCALE_BF16CVRT(void * input,void *output,void * i
 
 
     int32_t* input_i32 = (int32_t*)input;
-    float16_t* output_f16 = (float16_t*)output;
+    _Float16* output_f16 = (_Float16*)output;
     float_t* softmabuf_f32 = (float_t*)input;
 
     int seq_len = dim_i;
@@ -454,7 +454,7 @@ void fuse_ops_MASKED_SOFTMAX_KVSCALE_BF16CVRT(void * input,void *output,void * i
         int input_offset = j * input_stride;
         int output_offset = j * output_stride;
         int32_t* input_row = (int32_t*)(input + input_offset);
-        float16_t* output_row = (float16_t*)(output + output_offset);
+        _Float16* output_row = (_Float16*)(output + output_offset);
         float_t* softmabuf_f32_row = (float_t*)input_row;
         vl = __riscv_vsetvl_e32m4(avl);
         for (int k = 0, avl = seq_len, vl = 0; avl > 0; k += vl, avl -= vl) {
@@ -600,23 +600,77 @@ void CUTE_TASK_END(uint64_t task_id)
 {
     // printf("waiting for task end\n");
     //等待任务结束
-    uint64_t finish_tag = 1 << task_id;
-    uint64_t res1 = cute_marco_inst_fifo_finish_search();
-    while(!(res1&finish_tag))
-    {
-        // printf("Waiting for finish task_id = %d\n",task_id);
-        res1 = cute_marco_inst_fifo_finish_search();
-    }
-    cute_marco_inst_fifo_dequeue();
-    // printf("Task End\n");
+    // uint64_t finish_tag = 1 << task_id;
+    // uint64_t res1 = cute_marco_inst_fifo_finish_search();
+    // while(!(res1&finish_tag))
+    // {
+    //     // printf("Waiting for finish task_id = %d\n",task_id);
+    //     res1 = cute_marco_inst_fifo_finish_search();
+    // }
+    // cute_marco_inst_fifo_dequeue();
+    // printf("SIM Task End\n");
     return;
 }
 
 int cute_buf_id = 0;
 int CUTE_result_index = 0;
-void * CUTE_result[4] = {(void *) (0x70200000), (void *) (0x70200000 + SEQ_LEN * SEQ_LEN * 4), (void *) (0x70200000 + SEQ_LEN * SEQ_LEN * 4 * 2), (void *) (0x70200000 + SEQ_LEN * SEQ_LEN * 4 * 3)};//double buffer use shuttle tcm
-// void * CUTE_result_layerwise[2] = {(void *) (0x70200000), (void *) (0x70200000 + Tensor_M * EMBEDING_DIMENSION * 4)};//double buffer use shuttle tcm
-void * TCM_BUFF = (void *) (0x70200000);//2MB
+static char fakeTCM[1024*1024*2] __attribute__((aligned(64))) = {0};
+void * CUTE_result[4] = {(void *) (fakeTCM), (void *) (fakeTCM + SEQ_LEN * SEQ_LEN * 4), (void *) (fakeTCM + SEQ_LEN * SEQ_LEN * 4 * 2), (void *) (fakeTCM + SEQ_LEN * SEQ_LEN * 4 * 3)};//double buffer use shuttle tcm
+void * TCM_BUFF = (void *) (fakeTCM);//2MB
+
+int issue_cute_matmul_marco_inst_sim(uint64_t ATensor_Base_Addr,uint64_t ATensor_M_Stride,
+    uint64_t BTensor_Base_Addr,uint64_t BTensor_M_Stride,
+    uint64_t BiasTensor_Base_Addr,uint64_t BiasTensor_M_Stride,
+    uint64_t CTensor_Base_Addr,uint64_t CTensor_M_Stride,
+    uint64_t M,uint64_t N,uint64_t K,
+    uint64_t element_type,uint64_t bias_type,uint64_t transpose_result,uint64_t matmul_m_index)
+{
+
+    printf("SIM issue cute matmul marco inst\n");
+    if(element_type == CUTEDataTypeI8I8I32)
+    {
+        for(int i=0;i<M;i++)
+        {
+            int8_t* A = (int8_t*)(ATensor_Base_Addr + i*ATensor_M_Stride);
+            int8_t* B = (int8_t*)(BTensor_Base_Addr + i*BTensor_M_Stride);
+            int32_t* C = (int32_t*)(CTensor_Base_Addr + i*CTensor_M_Stride);
+            for(int j=0;j<N;j++)
+            {
+                int32_t acc = 0;
+                for(int k=0;k<K;k++)
+                {
+                    int8_t a_val = A[k];
+                    int8_t b_val = B[K];
+                    acc += (int32_t)a_val * (int32_t)b_val;
+                }
+                C[j] = acc;
+            }
+        }
+    }
+    else
+    {
+        for(int i=0;i<M;i++)
+        {
+            _Float16* A = (_Float16*)(ATensor_Base_Addr + i*ATensor_M_Stride);
+            _Float16* B = (_Float16*)(BTensor_Base_Addr + i*BTensor_M_Stride);
+            float* C = (float*)(CTensor_Base_Addr + i*CTensor_M_Stride);
+            for(int j=0;j<N;j++)
+            {
+                float acc = 0.0f;
+                for(int k=0;k<K;k++)
+                {
+                    float a_val = (float)A[k];
+                    float b_val = (float)B[k];
+                    acc += a_val * b_val;
+                }
+                C[j] = acc;
+            }
+        }
+
+    }
+    return 1;
+}
+
 float_t quant_absmax_buff[SEQ_LEN]__attribute__((aligned(256))) = {0};
 
 static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
@@ -638,16 +692,22 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
   switch (after_ops) {
     case FUSE_DEQUANT_ROPE_BF16CVRT://TODO:这里的rope刚好维度是64，所以可以展开
       afater_operation = fuse_ops_DEQUANT_ROPE_BF16CVRT;
+      break;
     case FUSE_DEQUANT_BF16CVRT:
       afater_operation = fuse_ops_DEQUANT_BF16CVRT;
+      break;
     case FUSE_MASKED_SOFTMAX_KVSCALE_BF16CVRT:
       afater_operation = fuse_ops_MASKED_SOFTMAX_KVSCALE_BF16CVRT;
+      break;
     case FUSE_DEQUANT_SILU:
       afater_operation = fuse_ops_DEQUANT_SILU;
+      break;
     case FUSE_DEQUANT_HADAMARD_QUANTSTAGE1:
       afater_operation = fuse_ops_DEQUANT_HADAMARD_QUANTSTAGE1;
+      break;
     case FUSE_DEQUANT_RESADD:
       afater_operation = fuse_ops_DEQUANT_RESADD;
+      break;
     default:
       afater_operation = NULL;
       break;
@@ -685,7 +745,7 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
     void* Tile_C = CUTE_result[CUTE_result_index];
     void* Tile_D = NULL;
 
-    wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, datatype, bias_type, Is_Transpose, 0);
+    wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst_sim(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, datatype, bias_type, Is_Transpose, 0);
 
     int i = 0;
     int j = 1;
@@ -707,8 +767,9 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
         Tile_C = CUTE_result[next_CUTE_result_index];//下一组任务
         Tile_D = NULL;
 
-        wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, datatype, bias_type, Is_Transpose, 0);
+        wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst_sim(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, datatype, bias_type, Is_Transpose, 0);
         //   void afater_operation(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_scale);
+        printf("AFTER OPS= %s\n",activation_name(after_ops));
         afater_operation(CUTE_result[CUTE_result_index],(C+(transpose_result ? pre_j : pre_i)*64*stride_C+(transpose_result ? pre_i : pre_j)*64*C_element_size),A_scale_factor,B_scale_factor,64,64,Application_stride_C,stride_C,scale_out);
 
         CUTE_result_index = next_CUTE_result_index;
@@ -716,6 +777,7 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
         pre_j = j;
     }
     CUTE_TASK_END(wait_after_operation_cute_task_id_pre);
+    printf("AFTER OPS= %s\n",activation_name(after_ops));
     afater_operation(CUTE_result[CUTE_result_index],(C+(transpose_result ? pre_j : pre_i)*64*stride_C+(transpose_result ? pre_i : pre_j)*64*C_element_size),A_scale_factor,B_scale_factor,64,64,Application_stride_C,stride_C,scale_out);
 
   }else if(after_ops != NO_ACTIVATION)
@@ -745,7 +807,7 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
     void* Tile_C = CUTE_result[CUTE_result_index];
     void* Tile_D = NULL;
 
-    wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, datatype, bias_type, Is_Transpose, 0);
+    wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst_sim(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, datatype, bias_type, Is_Transpose, 0);
 
     int i = 1;
     int pre_i = 0;
@@ -761,19 +823,22 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
         Tile_B = B;
         Tile_C = CUTE_result[CUTE_result_index==0?1:0];
         Tile_D = NULL;
-        wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, 1, bias_type, Is_Transpose, 0);
+        wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst_sim(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, 1, bias_type, Is_Transpose, 0);
 
+        printf("AFTER OPS= %s\n",activation_name(after_ops));
         afater_operation(CUTE_result[CUTE_result_index],(C+pre_i*64*stride_C),A_scale_factor,B_scale_factor,64,DIM_N,Application_stride_C,stride_C,scale_out);
         CUTE_result_index = CUTE_result_index == 0 ? 1:0;
         pre_i = i;
     }
     CUTE_TASK_END(wait_after_operation_cute_task_id_pre);
+    printf("AFTER OPS= %s\n",activation_name(after_ops));
     afater_operation(CUTE_result[CUTE_result_index],(C+pre_i*64*stride_C),A_scale_factor,B_scale_factor,64,DIM_N,Application_stride_C,stride_C,scale_out);
     
   }else 
   {
     //NO_ACTIVATION
-    issue_cute_matmul_marco_inst(A, stride_A, B, stride_B, NULL, 0, C, stride_C, DIM_M, DIM_N, DIM_K, datatype, TaskTypeTensorZeroLoad, transpose_result, 0);
+    printf("AFTER OPS= %s\n",activation_name(after_ops));
+    issue_cute_matmul_marco_inst_sim(A, stride_A, B, stride_B, NULL, 0, C, stride_C, DIM_M, DIM_N, DIM_K, datatype, TaskTypeTensorZeroLoad, transpose_result, 0);
   }
 }
 
