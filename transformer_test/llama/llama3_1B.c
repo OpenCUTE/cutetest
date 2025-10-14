@@ -1,5 +1,3 @@
-// #include <cstdint>
-#include <cstdint>
 #include <stdio.h>
 #include <string.h>
 #include <stdbool.h>
@@ -49,6 +47,8 @@
 #define N_HEAD_KV 8
 #define MAX_CTX_LEN 8192
 #define FFN_DIMENSION 8192
+#define SQRT_KEY_DIMENSION 8.0
+#define INV_SQRT_KEY_DIMENSION 0.125
 
 static inline float fast_sqrt(float x) {
     float result;
@@ -64,7 +64,11 @@ static float rope_theta[KEY_DIMENSION/2] __attribute__((aligned(64))) = {1.0000e
         3.9528e-06, 2.3539e-06, 1.4017e-06, 8.3469e-07, 4.9704e-07, 2.9598e-07,
         1.7625e-07, 1.0496e-07};
 
-static float identity[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(256))) = {0};
+// #define SOFTAMAX_MASKED_0 1
+
+static int8_t bitmask_ptr[SEQ_LEN][SEQ_LEN] __attribute__((aligned(64))) = {0};
+
+static float identity[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static float attn_norm_weight[EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static int8_t proj_q_weight[N_HEAD_Q][KEY_DIMENSION][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static float  proj_q_scale[1] = {0};
@@ -85,26 +89,28 @@ static float  ffn_down_scale[1] = {0};
 static int8_t hidden_states_buf_q8_after_pre_rmsnorm[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static float  hidden_states_buf_q8_after_pre_rmsnorm_scale[SEQ_LEN] = {0};
 
-static float  proj_q_buf_q16[SEQ_LEN][N_HEAD_Q][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
-static float  proj_k_buf_q16[SEQ_LEN][N_HEAD_KV][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
-static float  proj_v_buf_q16[SEQ_LEN][N_HEAD_KV][VALUE_DIMENSION] __attribute__((aligned(64))) = {0};
+static float16_t  proj_q_buf_q16[SEQ_LEN][N_HEAD_Q][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
+static float16_t  proj_k_buf_q16[SEQ_LEN][N_HEAD_KV][KEY_DIMENSION] __attribute__((aligned(64))) = {0};
+static float16_t  proj_v_buf_q16[SEQ_LEN][N_HEAD_KV][VALUE_DIMENSION] __attribute__((aligned(64))) = {0};
 
-static float  scores_buf_q16[N_HEAD_Q][SEQ_LEN][SEQ_LEN] __attribute__((aligned(64))) = {0};
+static float16_t  scores_buf_q16[N_HEAD_Q][SEQ_LEN][SEQ_LEN] __attribute__((aligned(64))) = {0};
 
 static int8_t attn_buf_q8[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static float  attn_buf_q8_scale[SEQ_LEN] = {0};
+
+static float*  proj_o_buf_f32 = identity;
 
 static int8_t proj_o_buf_after_RMSNORM_q8[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
 static float  proj_o_buf_after_RMSNORM_q8_scale[SEQ_LEN] = {0};
 
 static float ffn_gate_buf_f32[SEQ_LEN][FFN_DIMENSION] __attribute__((aligned(64))) = {0};
 
-static float ffn_up_buf_f32[SEQ_LEN][FFN_DIMENSION] __attribute__((aligned(64))) = {0};
+static float* ffn_up_buf_f32 = ffn_gate_buf_f32;
 
 static int8_t ffn_up_buf_q8[SEQ_LEN][FFN_DIMENSION] __attribute__((aligned(64))) = {0};
 static float ffn_up_buf_q8_scale[SEQ_LEN] __attribute__((aligned(64))) = {0};
 
-static float hidden_states_output[SEQ_LEN][EMBEDING_DIMENSION] __attribute__((aligned(64))) = {0};
+static float* hidden_states_output= identity;
 
 
 
@@ -194,7 +200,7 @@ inline vfloat32m4_t vec_cos(vfloat32m4_t x, size_t vl) {
 }
 
 
-void fuse_ops_DEQUANT_ROPE_BF16CVRT(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride)
+void fuse_ops_DEQUANT_ROPE_BF16CVRT(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_scale)
 {
     //stage 1: dequant input(I32) with scale to f32
     //stage 2: rope
@@ -231,6 +237,7 @@ void fuse_ops_DEQUANT_ROPE_BF16CVRT(void * input,void *output,void * input_scale
                 size_t avl, vl;
                 float_t scale = input_scale_f32[j] * weight_scale_f32[0];
                 // 处理每两个元素（实部和虚部）
+                vl = __riscv_vsetvl_e32m4(avl);
                 for (int k = 0, avl = half_dim, vl = 0; avl > 0; k += vl, avl -= vl) {
                     vl = __riscv_vsetvl_e32m4(avl);
 
@@ -264,17 +271,17 @@ void fuse_ops_DEQUANT_ROPE_BF16CVRT(void * input,void *output,void * input_scale
                     // 存储结果
 
                     // 转化为fp16再存储
-                    vfloat16m4_t real_out_fp16 = __riscv_vfncvt_rod_f_f_w_f16m4(real_out, vl);
-                    vfloat16m4_t imag_out_fp16 = __riscv_vfncvt_rod_f_f_w_f16m4(imag_out, vl);
-                    __riscv_vse16_v_f16m4(output_f16 + output_offset + k, real_out_fp16, vl);
-                    __riscv_vse16_v_f16m4(output_f16 + output_offset + half_dim + k, imag_out_fp16, vl);
+                    vfloat16m2_t real_out_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(real_out, vl);
+                    vfloat16m2_t imag_out_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(imag_out, vl);
+                    __riscv_vse16_v_f16m2(output_f16 + output_offset + k, real_out_fp16, vl);
+                    __riscv_vse16_v_f16m2(output_f16 + output_offset + half_dim + k, imag_out_fp16, vl);
                 }
             }
         }
     }
 }
 
-void fuse_ops_DEQUANT_BF16CVRT(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride)
+void fuse_ops_DEQUANT_BF16CVRT(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_scale)
 {
     //stage 1: dequant input(I32) with scale to f32
     //stage 2: cvrt to fp16
@@ -303,7 +310,7 @@ void fuse_ops_DEQUANT_BF16CVRT(void * input,void *output,void * input_scale,void
                 int output_offset = b * n_head * seq_len * head_dim +
                 i * seq_len * head_dim +
                 j * head_dim;
-
+                vl = __riscv_vsetvl_e32m4(avl);
                 for (int k = 0, avl = headdim, vl = 0; avl > 0; k += vl, avl -= vl) {
                     vl = __riscv_vsetvl_e32m4(avl);
                     
@@ -311,14 +318,297 @@ void fuse_ops_DEQUANT_BF16CVRT(void * input,void *output,void * input_scale,void
 
                     vfloat32m4_t deq_done = __riscv_vfmul_vf_f32m4(__riscv_vfcvt_f_x_v_f32m4(input_vec, vl), scale, vl);
 
-                    vfloat16m4_t deq_done_fp16 = __riscv_vfncvt_rod_f_f_w_f16m4(deq_done, vl);
-                    __riscv_vse16_v_f16m4(output_f16 + output_offset + k, deq_done_fp16, vl);
+                    vfloat16m2_t deq_done_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(deq_done, vl);
+                    __riscv_vse16_v_f16m2(output_f16 + output_offset + k, deq_done_fp16, vl);
                 }
             }
         }
     }
 }
 
+
+
+inline vfloat32m4_t vec_exp(vfloat32m4_t x, size_t vl) {
+    // x = ln2 * a + b, 其中 b ∈ [0, ±ln2]
+    // eˣ = 2ᵃ * eᵇ
+    // 常数定义
+    const float NEG_LN2 = -0.69314718056f;
+    const float INV_LN2 = 1.44269504089f;
+    const int32_t MAX_A = 127; // 防止指数溢出
+    const int32_t MIN_A = -126; // 防止指数下溢
+
+    // 计算 a = round(x / ln2)
+    vfloat32m4_t af = __riscv_vfmul_vf_f32m4(x, INV_LN2, vl);
+    vfloat32m4_t r = __riscv_vfmv_v_f_f32m4(0x1.8p23f, vl); // 2²³ + 2²²，用于取整
+    vfloat32m4_t a = __riscv_vfadd_vv_f32m4(af, r, vl);
+    a = __riscv_vfsub_vv_f32m4(a, r, vl);
+    vint32m4_t a_int = __riscv_vfcvt_x_f_v_i32m4(a, vl);
+    // 处理 a 的边界情况
+    vbool8_t mask_max = __riscv_vmsgt_vx_i32m4_b8(a_int, MAX_A, vl);    // res[i] = op1[i] > op2
+    vbool8_t mask_min = __riscv_vmslt_vx_i32m4_b8(a_int, MIN_A, vl);    // res[i] = op1[i] < op2
+
+    // 计算 2ᵃ
+    vint32m4_t biased_exponent = __riscv_vadd_vx_i32m4(a_int, 127, vl); // 加上偏置127
+    biased_exponent = __riscv_vsll_vx_i32m4(biased_exponent, 23, vl); // 左移23位
+    vfloat32m4_t a2 = __riscv_vreinterpret_v_i32m4_f32m4(biased_exponent); // 视为浮点数
+
+    // 计算 b = x - a * ln2
+    // res = a2 * a3 + a1
+    vfloat32m4_t b = __riscv_vfmacc_vf_f32m4(x, NEG_LN2, a, vl);
+
+    // 计算 eᵇ
+    // 泰勒展开多项式系数
+    vfloat32m4_t c0 = __riscv_vfmv_v_f_f32m4(1.0f, vl);
+    vfloat32m4_t c1 = __riscv_vfmv_v_f_f32m4(1.0f, vl);
+    vfloat32m4_t c2 = __riscv_vfmv_v_f_f32m4(0.5f, vl);
+    vfloat32m4_t c3 = __riscv_vfmv_v_f_f32m4(0.166666666667f, vl);
+    vfloat32m4_t c4 = __riscv_vfmv_v_f_f32m4(0.041666666667f, vl);
+    vfloat32m4_t c5 = __riscv_vfmv_v_f_f32m4(0.008333333333f, vl);
+    vfloat32m4_t c6 = __riscv_vfmv_v_f_f32m4(0.001388888889f, vl);
+    vfloat32m4_t  p;
+    // exp(b) ≈ c₀ + b * (c₁ + b * (c₂ + b * (c₃ + b * (c₄ + b * (c₅ + b * c₆)))))
+    // res = a1 + a2 * a3
+    p = __riscv_vfmacc_vv_f32m4(c5, c6, b, vl);
+    p = __riscv_vfmacc_vv_f32m4(c4,  p, b, vl);
+    p = __riscv_vfmacc_vv_f32m4(c3,  p, b, vl);
+    p = __riscv_vfmacc_vv_f32m4(c2,  p, b, vl);
+    p = __riscv_vfmacc_vv_f32m4(c1,  p, b, vl);
+    p = __riscv_vfmacc_vv_f32m4(c0,  p, b, vl);
+    
+    // 计算 2ᵃ * eᵇ
+    p = __riscv_vfmul_vv_f32m4(a2, p, vl);
+
+    // 处理边界情况
+    // mask[i] ? op2[i] : op1[i]
+    p = __riscv_vmerge_vvm_f32m4(p, __riscv_vfmv_v_f_f32m4(INFINITY, vl), mask_max, vl);
+    p = __riscv_vmerge_vvm_f32m4(p, __riscv_vfmv_v_f_f32m4(0.0f, vl), mask_min, vl);
+    return p;
+}
+
+inline void softmax_cvrtfp16(void* x, void* y, void* bitmask_ptr, int M, int N) {
+    // printf("RISC-V specific implementation WORK IN PROGRESS\n");
+    for (int i = 0; i < M; i++) {
+        float* row_x = &(((float_t* )x)[i * N]);
+        float* row_y = &(((float16_t* )y)[i * N]);
+        size_t avl, vl;
+        size_t vl_0 = __riscv_vsetvl_e32m4(N);
+        // 第一步：计算最大值
+        float max_val = row_x[0];
+        vfloat32m4_t max_vec = __riscv_vfmv_v_f_f32m4(max_val, vl_0);
+        vl = __riscv_vsetvl_e32m4(avl);
+        for (int j = 0, avl = N; avl > 0; j += vl, avl -= vl) {
+            vl = __riscv_vsetvl_e32m4(avl);
+            vfloat32m4_t vec = __riscv_vle32_v_f32m4(&row_x[j], vl);
+            vbool8_t mask = __riscv_vlm_v_b8((uint8_t*)(bitmask_ptr + (i * N + j)/8), vl);
+            // mask[i] ? op2[i] : op1[i]
+            vec = __riscv_vmerge_vvm_f32m4(__riscv_vfmv_v_f_f32m4(-INFINITY, vl), vec, mask, vl);
+            max_vec = __riscv_vfmax_vv_f32m4(max_vec, vec, vl);
+        }
+        max_val = __riscv_vfmv_f_s_f32m1_f32(__riscv_vfredmax_vs_f32m4_f32m1(max_vec, __riscv_vfmv_v_f_f32m1(-INFINITY, vl_0), vl_0));
+        // 第二步：计算指数和求和
+        float sum_exp = 0.0f;
+        vfloat32m4_t sumexp_vec = __riscv_vfmv_v_f_f32m4(0.0f, vl_0);
+        // 向量化计算指数和求和
+        vl = __riscv_vsetvl_e32m4(avl);
+        for (int j = 0, avl = N; avl > 0; j += vl, avl -= vl) {
+            vl = __riscv_vsetvl_e32m4(avl);
+            vfloat32m4_t vec = __riscv_vle32_v_f32m4(&row_x[j], vl);
+            vec = __riscv_vfsub_vf_f32m4(vec, max_val, vl); // 减去最大值
+
+            // 应用掩码
+            vbool8_t mask = __riscv_vlm_v_b8((uint8_t*)(bitmask_ptr + (i * N + j)/8), vl);
+            // vec = __riscv_vmerge_vvm_f32m4(__riscv_vfmv_v_f_f32m4(-INFINITY, vl), vec, mask, vl);
+            vec = __riscv_vmerge_vvm_f32m4(__riscv_vfmv_v_f_f32m4(-90, vl), vec, mask, vl);
+
+            // 计算 exp(x)
+            vfloat32m4_t exp_vec = vec_exp(vec, vl);
+            
+            // 存储结果
+            __riscv_vse32_v_f32m4(&row_x[j], exp_vec, vl);
+            
+            // 向量求和
+            sumexp_vec = __riscv_vfadd_vv_f32m4(sumexp_vec, exp_vec, vl);
+        }
+        sum_exp = __riscv_vfmv_f_s_f32m1_f32(__riscv_vfredusum_vs_f32m4_f32m1(sumexp_vec, __riscv_vfmv_v_f_f32m1(0.0f, vl_0), vl_0));
+        
+        // 第三步：归一化
+        vfloat32m4_t inv_sum_exp_vec = __riscv_vfmv_v_f_f32m4(1.0f / sum_exp, vl_0);
+        vl = __riscv_vsetvl_e32m4(avl);
+        for (int j = 0, avl = N; avl > 0; j += vl, avl -= vl) {
+            vl = __riscv_vsetvl_e32m4(avl);
+            vfloat32m4_t vec = __riscv_vle32_v_f32m4(&row_x[j], vl);
+            vfloat32m4_t normalized = __riscv_vfmul_vv_f32m4(vec, inv_sum_exp_vec, vl);
+            vfloat16m2_t normalized_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(normalized, vl);
+            __riscv_vse16_v_f16m2((float16_t*)&row_y[j], normalized_fp16, vl);
+        }
+    }
+  
+}
+
+
+void fuse_ops_MASKED_SOFTMAX_KVSCALE_BF16CVRT(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_scale)
+{
+    //stage 1: dequant input(I32) with scale to f32,multi INV_SQRT_KEY_DIMENSION
+    //stage 2: do masked softmax
+    //stage 3: cvrt to fp16
+
+
+    int32_t* input_i32 = (int32_t*)input;
+    float16_t* output_f16 = (float16_t*)output;
+    float_t* softmabuf_f32 = (float_t*)input;
+
+    int head_dim = dim_j;
+    int batch = 1;
+    int n_head = 1;
+    int seq_len = dim_i;
+    // int headdim = dim_j;
+
+
+    for (int j = 0; j < seq_len; j++) {
+        size_t avl, vl;
+        float_t scale = INV_SQRT_KEY_DIMENSION;
+
+        int input_offset = j * head_dim;
+        int output_offset = j * head_dim;
+        vl = __riscv_vsetvl_e32m4(avl);
+        for (int k = 0, avl = seq_len, vl = 0; avl > 0; k += vl, avl -= vl) {
+            vl = __riscv_vsetvl_e32m4(avl);
+            
+            vint32m4_t input_vec = __riscv_vle32_v_i32m4(input_i32 + input_offset + k, vl);
+
+            vfloat32m4_t deq_done = __riscv_vfmul_vf_f32m4(__riscv_vfcvt_f_x_v_f32m4(input_vec, vl), scale, vl);
+
+            //store to float32_t buffer for softmax
+            __riscv_vse32_v_f32m4(softmabuf_f32 + output_offset + k, deq_done, vl);
+        }
+    }
+    softmax_cvrtfp16(softmabuf_f32, output_f16, bitmask_ptr, seq_len, seq_len);
+
+}
+
+
+void fuse_ops_DEQUANT_RESADD(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_scale)
+{
+    //stage 1: dequant input(I32) with scale to f32
+    //stage 2: add residual
+
+    //input scale  is per token scale
+    //weight scale is per tensor scale
+    int32_t* input_i32 = (int32_t*)input;
+    float_t* output_f32 = (float_t*)output;
+    float_t * input_scale_f32 = (float_t *)input_scale;
+    float_t * weight_scale_f32 = (float_t *)weight_scale;
+
+    int head_dim = dim_j;
+    int batch = 1;
+    int n_head = 1;
+    int seq_len = dim_i;
+    int headdim = dim_j;
+
+    for (int b = 0; b < batch; b++) {
+        for (int i = 0; i < n_head; i++) {
+            for (int j = 0; j < seq_len; j++) {
+                size_t avl, vl;
+                vl = __riscv_vsetvl_e32m4(avl);
+                float_t scale = input_scale_f32[j] * weight_scale_f32[0];
+                int input_offset = b * n_head * seq_len * head_dim +
+                i * seq_len * head_dim +
+                j * head_dim;
+                int output_offset = b * n_head * seq_len * head_dim +
+                i * seq_len * head_dim +
+                j * head_dim;
+
+                for (int k = 0, avl = headdim, vl = 0; avl > 0; k += vl, avl -= vl) {
+                    vl = __riscv_vsetvl_e32m4(avl);
+                    
+                    vint32m4_t input_vec = __riscv_vle32_v_i32m4(input_i32 + input_offset + k, vl);
+                    vfloat32m4_t res_vec = __riscv_vle32_v_f32m4(output_f32 + output_offset + k, vl);
+
+                    vfloat32m4_t deq_done = __riscv_vfmul_vf_f32m4(__riscv_vfcvt_f_x_v_f32m4(input_vec, vl), scale, vl);
+                    vfloat32m4_t result = __riscv_vfadd_vv_f32m4(deq_done, res_vec, vl);
+                    
+                    __riscv_vse32_v_f32m4(output_f32 + output_offset + k, result, vl);
+                }
+            }
+        }
+    }
+}
+
+void silu(float* input, float* output, int batch, int exhidden_dim, int hidden_dim)
+{
+    // printf("RISC-V specific implementation WORK IN PROGRESS\n");
+
+}
+
+void fuse_ops_DEQUANT_SILU(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_scale)
+{
+    //stage 1: dequant input(I32) with scale to f32
+    //stage 2: do SILU
+
+    //input scale  is per token scale
+    //weight scale is per tensor scale
+    int32_t* input_i32 = (int32_t*)input;
+    float_t* output_f32 = (float_t*)output;
+    float_t * input_scale_f32 = (float_t *)input_scale;
+    float_t * weight_scale_f32 = (float_t *)weight_scale;
+
+    for (int s = 0; s < dim_i; s++) {
+        float* row_input  = &input[s * dim_j];
+        float* row_output = &output[s * dim_j];
+        size_t avl, vl;
+        vl = __riscv_vsetvl_e32m4(avl);
+        float_t scale = input_scale_f32[s] * weight_scale_f32[0];
+        for (int i = 0, avl = dim_j; avl > 0; i += vl, avl -= vl) {
+            vl = __riscv_vsetvl_e32m4(avl);
+            vint32m4_t input_vec = __riscv_vle32_v_i32m4(&row_input[i], vl);
+            vfloat32m4_t x = __riscv_vfmul_vf_f32m4(__riscv_vfcvt_f_x_v_f32m4(input_vec, vl), scale, vl);
+            vfloat32m4_t exp_neg_x = vec_exp(__riscv_vfneg_v_f32m4(x, vl), vl);
+            vfloat32m4_t silu = __riscv_vfdiv_vv_f32m4(x, __riscv_vfadd_vf_f32m4(exp_neg_x, 1.0f, vl), vl);//div性能很差啊
+            __riscv_vse32_v_f32m4(&row_output[i], silu, vl);
+        }
+    }
+}
+
+void fuse_ops_DEQUANT_HADAMARD_QUANTSTAGE1(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_max)
+{
+    //stage 1: dequant input(I32) with scale to f32
+    //stage 2: do HADAMARD product
+    //stage 3: quant stage1
+
+    //input scale  is per token scale
+    //weight scale is per tensor scale
+    int32_t* input_i32 = (int32_t*)input;
+    float_t* output_f32 = (float_t*)output;
+    float_t * input_scale_f32 = (float_t *)input_scale;
+    float_t * weight_scale_f32 = (float_t *)weight_scale;
+    float_t * output_max_f32 = (float_t *)output_max;
+
+    for (int s = 0; s < dim_i; s++) {
+        float* row_input  = &input[s * dim_j];
+        float* row_output = &output[s * dim_j];
+        size_t avl, vl;
+        float_t scale = input_scale_f32[s] * weight_scale_f32[0];
+        vl = __riscv_vsetvl_e32m4(avl);
+        vfloat32m4_t absmax_vec = __riscv_vfmv_v_f_f32m4(0.0f, vl);
+        for (int i = 0, avl = dim_j; avl > 0; i += vl, avl -= vl) {
+            vl = __riscv_vsetvl_e32m4(avl);
+            vint32m4_t input_vec = __riscv_vle32_v_i32m4(&row_input[i], vl);
+            vfloat32m4_t x = __riscv_vfmul_vf_f32m4(__riscv_vfcvt_f_x_v_f32m4(input_vec, vl), scale, vl);
+
+            vfloat32m4_t hadamard_vec = __riscv_vle32_v_f32m4(&row_output[i], vl);
+            vfloat32m4_t hadamard_res = __riscv_vfmul_vv_f32m4(x, hadamard_vec, vl);
+
+            __riscv_vse32_v_f32m4(&row_output[i], hadamard_res, vl);
+
+            //quant stage 1
+            //find absmax
+            vfloat32m4_t abs_hadamard = __riscv_vfsgnj_vv_f32m4(hadamard_res, hadamard_res, vl);
+            absmax_vec = __riscv_vfmax_vv_f32m4(absmax_vec, abs_hadamard, vl);
+        }
+        float_t current_max =__riscv_vfmv_f_s_f32m1_f32(__riscv_vfredmax_vs_f32m4_f32m1(absmax_vec, __riscv_vfmv_v_f_f32m1(0.0f, vl), vl));
+        output_max_f32[s] = current_max > output_max_f32[s] ? current_max : output_max_f32[s];
+    }
+}
 
 void CUTE_TASK_END(uint64_t task_id)
 {
@@ -344,7 +634,7 @@ void * TCM_BUFF = (void *) (0x70200000);//2MB
 float_t quant_absmax_buff[SEQ_LEN]__attribute__((aligned(256))) = {0};
 
 static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
-        const void* A, const void* B, void* C,
+        const void* A, const void* B, void* C,void* element_wise_tensor,void* scale_out,
         float_t* A_scale_factor, float_t* B_scale_factor,int scale_type,
         size_t stride_A, size_t stride_B, size_t stride_C,
         int datatype,int after_ops,int transpose_result)
@@ -356,34 +646,29 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
     exit(1);
   }
 
-//   void afater_operation(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride)
-  void (*afater_operation)(void* ,void* ,void* ,void* ,int ,int ,uint64_t ,uint64_t ) = NULL;
+//   void afater_operation(void * input,void *output,void * input_scale,void *weight_scale,int dim_i,int dim_j,uint64_t input_stride,uint64_t output_stride, void* output_scale);
+  void (*afater_operation)(void* ,void* ,void* ,void* ,int ,int ,uint64_t ,uint64_t,void*) = NULL;
 
   switch (after_ops) {
-    case NO_ACTIVATION:
-      afater_operation = NULL;
-      break;
     case FUSE_DEQUANT_ROPE_BF16CVRT://TODO:这里的rope刚好维度是64，所以可以展开
       afater_operation = fuse_ops_DEQUANT_ROPE_BF16CVRT;
     case FUSE_DEQUANT_BF16CVRT:
       afater_operation = fuse_ops_DEQUANT_BF16CVRT;
     case FUSE_MASKED_SOFTMAX_KVSCALE_BF16CVRT:
-      afater_operation = NULL;
-    case FUSE_DEQUANT_RESADD_RMSNORM_QUANT:
-      afater_operation = NULL;
+      afater_operation = fuse_ops_MASKED_SOFTMAX_KVSCALE_BF16CVRT;
     case FUSE_DEQUANT_SILU:
-      afater_operation = NULL;
+      afater_operation = fuse_ops_DEQUANT_SILU;
     case FUSE_DEQUANT_HADAMARD_QUANTSTAGE1:
-      afater_operation = NULL;
+      afater_operation = fuse_ops_DEQUANT_HADAMARD_QUANTSTAGE1;
     case FUSE_DEQUANT_RESADD:
-      afater_operation = NULL;
+      afater_operation = fuse_ops_DEQUANT_RESADD;
     default:
       afater_operation = NULL;
       break;
   }
 
 
-  if(after_ops != FUSE_MASKED_SOFTMAX_KVSCALE_BF16CVRT && after_ops != FUSE_DEQUANT_RESADD_RMSNORM_QUANT)
+  if(after_ops != FUSE_MASKED_SOFTMAX_KVSCALE_BF16CVRT && after_ops != FUSE_DEQUANT_RESADD_RMSNORM_QUANT && after_ops != NO_ACTIVATION)
   {
     int Tile_I = DIM_M / 64;
     int Tile_J = DIM_N / 64;
@@ -435,16 +720,16 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
 
         wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, datatype, bias_type, Is_Transpose, 0);
         
-        afater_operation(CUTE_result[CUTE_result_index],64,64,(C+(transpose_result ? pre_j : pre_i)*64*stride_C+(transpose_result ? pre_i : pre_j)*64),0,stride_C);
+        // afater_operation(CUTE_result[CUTE_result_index],64,64,(C+(transpose_result ? pre_j : pre_i)*64*stride_C+(transpose_result ? pre_i : pre_j)*64),0,stride_C);
 
         CUTE_result_index = next_CUTE_result_index;
         pre_i = i;
         pre_j = j;
     }
     CUTE_TASK_END(wait_after_operation_cute_task_id_pre);
-    afater_operation(CUTE_result[CUTE_result_index],64,64,(C+(transpose_result ? pre_j : pre_i)*64*stride_C+(transpose_result ? pre_i : pre_j)*64),0,stride_C);
+    // afater_operation(CUTE_result[CUTE_result_index],64,64,(C+(transpose_result ? pre_j : pre_i)*64*stride_C+(transpose_result ? pre_i : pre_j)*64),0,stride_C);
 
-  }else
+  }else if(after_ops != NO_ACTIVATION)
   {
     ////TODO:will get proj_o_buf_after_RMSNORM_q8_scale
     int Tile_I = DIM_M / 64;
@@ -489,13 +774,17 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
         Tile_D = NULL;
         wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C, Application_M, Application_N, Application_K, 1, bias_type, Is_Transpose, 0);
 
-        afater_operation(CUTE_result_layerwise[CUTE_result_index],64,DIM_N,(C+pre_i*64*stride_C),0.0,stride_C);
+        // afater_operation(CUTE_result_layerwise[CUTE_result_index],64,DIM_N,(C+pre_i*64*stride_C),0.0,stride_C);
         CUTE_result_index = CUTE_result_index == 0 ? 1:0;
         pre_i = i;
     }
     CUTE_TASK_END(wait_after_operation_cute_task_id_pre);
-    afater_operation(CUTE_result_layerwise[CUTE_result_index],64,DIM_N,(C+pre_i*64*stride_C),0.0,stride_C);
+    // afater_operation(CUTE_result_layerwise[CUTE_result_index],64,DIM_N,(C+pre_i*64*stride_C),0.0,stride_C);
     
+  }else 
+  {
+    //NO_ACTIVATION
+    issue_cute_matmul_marco_inst(A, stride_A, B, stride_B, NULL, 0, C, stride_C, DIM_M, DIM_N, DIM_K, datatype, TaskTypeTensorZeroLoad, transpose_result, 0);
   }
 }
 
@@ -632,7 +921,6 @@ void RMSnorm(float* input, float* output, float* per_channle_scale, float rms_ep
                 scaled_vec = __riscv_vfmul_vv_f32m4(scaled_vec, per_channle_scale_vec, vl);
                 __riscv_vse32_v_f32m4(&output[b * seq_len * hidden_dim + j * hidden_dim + h], scaled_vec, vl);
             }
-
         }
     }
 }
@@ -691,19 +979,19 @@ uint64_t llama_block(
 
     //proj_q
     matmul_cute(SEQ_LEN, EMBEDING_DIMENSION, EMBEDING_DIMENSION,
-        hidden_states_buf_q8_after_pre_rmsnorm, proj_q_weight, proj_q_buf_q16,
+        hidden_states_buf_q8_after_pre_rmsnorm, proj_q_weight, proj_q_buf_q16, NULL,NULL,
         hidden_states_buf_q8_after_pre_rmsnorm_scale,proj_q_scale,SCALE_TYPE_PERTOKEN_A_PERTENSOR_B,
         EMBEDING_DIMENSION, EMBEDING_DIMENSION, EMBEDING_DIMENSION * 2,//bf16
         CUTEDataTypeI8I8I32,FUSE_DEQUANT_ROPE_BF16CVRT,0);
     //proj_k
     matmul_cute(SEQ_LEN, EMBEDING_DIMENSION / 4, EMBEDING_DIMENSION,
-        hidden_states_buf_q8_after_pre_rmsnorm, proj_k_weight, proj_k_buf_q16,
+        hidden_states_buf_q8_after_pre_rmsnorm, proj_k_weight, proj_k_buf_q16, NULL,NULL,
         hidden_states_buf_q8_after_pre_rmsnorm_scale,proj_k_scale,SCALE_TYPE_PERTOKEN_A_PERTENSOR_B,
         EMBEDING_DIMENSION, EMBEDING_DIMENSION, EMBEDING_DIMENSION / 4 * 2,//bf16
         CUTEDataTypeI8I8I32,FUSE_DEQUANT_ROPE_BF16CVRT,0);
     //proj_v
     matmul_cute(SEQ_LEN, EMBEDING_DIMENSION / 4, EMBEDING_DIMENSION,
-        hidden_states_buf_q8_after_pre_rmsnorm, proj_v_weight, proj_v_buf_q16,
+        hidden_states_buf_q8_after_pre_rmsnorm, proj_v_weight, proj_v_buf_q16, NULL,NULL,
         hidden_states_buf_q8_after_pre_rmsnorm_scale,proj_v_scale,SCALE_TYPE_PERTOKEN_A_PERTENSOR_B,
         EMBEDING_DIMENSION, EMBEDING_DIMENSION, EMBEDING_DIMENSION / 4 * 2,//bf16
         CUTEDataTypeI8I8I32,FUSE_DEQUANT_BF16CVRT,1);
@@ -717,10 +1005,10 @@ uint64_t llama_block(
 
         int factor = 8;//TODO:!KVSCALE
         matmul_cute(SEQ_LEN, SEQ_LEN, KEY_DIMENSION,
-            A, B, C,
+            A, B, C, NULL,NULL,
             NULL,NULL,SCALE_TYPE_NONE,
             KEY_DIMENSION*N_HEAD_Q * 2, KEY_DIMENSION*N_HEAD_KV * 2, SEQ_LEN*2,
-            CUTEDataTypeBF16BF16F32,FUSE_MASKED_SOFTMAX_KVSCALE_BF16CVRT,0);
+            CUTEDataTypeF16F16F32,FUSE_MASKED_SOFTMAX_KVSCALE_BF16CVRT,0);
     }
 
     //attention
@@ -729,10 +1017,10 @@ uint64_t llama_block(
         float *B = (void*)proj_v_buf_q16 + (i/(N_HEAD_Q/N_HEAD_KV)) * SEQ_LEN * VALUE_DIMENSION * 2;//8*64*128
         float *C = (void*)CUTE_result_layerwise + i * VALUE_DIMENSION * 4;//128*2048
         matmul_cute(SEQ_LEN, VALUE_DIMENSION, SEQ_LEN,
-            A, B, C,
-            NULL,NULL,SCALE_TYPE_NONE,
+            A, B, C,NULL,
+            NULL,NULL,SCALE_TYPE_NONE, NULL,
             SEQ_LEN * 2, SEQ_LEN * 2, EMBEDING_DIMENSION*4,//
-            CUTEDataTypeBF16BF16F32,NO_ACTIVATION,0);
+            CUTEDataTypeF16F16F32,NO_ACTIVATION,0);
     }
 
     //smoothquant attention
@@ -741,32 +1029,36 @@ uint64_t llama_block(
 
     //proj_o
     matmul_cute(SEQ_LEN, EMBEDING_DIMENSION, EMBEDING_DIMENSION,
-        attn_buf_q8, proj_o_weight, proj_o_buf_after_RMSNORM_q8,
+        attn_buf_q8, proj_o_weight, proj_o_buf_f32,identity,NULL,//proj_o_buf_f32 == identity == hidden_states_output
         attn_buf_q8_scale,proj_o_scale,SCALE_TYPE_PERTOKEN_A_PERTENSOR_B,
-        EMBEDING_DIMENSION, EMBEDING_DIMENSION, EMBEDING_DIMENSION,//int8
-        CUTEDataTypeI8I8I32,FUSE_DEQUANT_RESADD_RMSNORM_QUANT,0);//TODO:will get proj_o_buf_after_RMSNORM_q8_scale
+        EMBEDING_DIMENSION, EMBEDING_DIMENSION, EMBEDING_DIMENSION*4,//fp32
+        CUTEDataTypeI8I8I32,FUSE_DEQUANT_RESADD,0);
+
+    RMSnorm_With_getabsmax_scale(proj_o_buf_f32, TCM_BUFF, ffn_norm_weight, proj_o_buf_after_RMSNORM_q8_scale, RMS_EPSILON, 1, SEQ_LEN, EMBEDING_DIMENSION);
+    smoothquant(TCM_BUFF,SEQ_LEN, EMBEDING_DIMENSION,proj_o_buf_after_RMSNORM_q8, proj_o_buf_after_RMSNORM_q8_scale, false);
+ 
 
     //ffn_gate
     matmul_cute(SEQ_LEN, FFN_DIMENSION, EMBEDING_DIMENSION,
-        proj_o_buf_after_RMSNORM_q8, ffn_gate_weight, ffn_gate_buf_f32,
+        proj_o_buf_after_RMSNORM_q8, ffn_gate_weight, ffn_gate_buf_f32, NULL,NULL,//ffn_gate_buf_f32 == ffn_up_buf_f32
         proj_o_buf_after_RMSNORM_q8_scale,ffn_gate_scale,SCALE_TYPE_PERTOKEN_A_PERTENSOR_B,
         EMBEDING_DIMENSION, EMBEDING_DIMENSION, FFN_DIMENSION * 4,//fp32
         CUTEDataTypeI8I8I32,FUSE_DEQUANT_SILU,0);
 
     //ffn_up
     matmul_cute(SEQ_LEN, FFN_DIMENSION, EMBEDING_DIMENSION,
-        proj_o_buf_after_RMSNORM_q8, ffn_up_weight, ffn_up_buf_f32,
+        proj_o_buf_after_RMSNORM_q8, ffn_up_weight, ffn_up_buf_f32, ffn_gate_buf_f32,ffn_up_buf_q8_scale, //ffn_gate_buf_f32 == ffn_up_buf_f32
         proj_o_buf_after_RMSNORM_q8_scale,ffn_up_scale,SCALE_TYPE_PERTOKEN_A_PERTENSOR_B,
         EMBEDING_DIMENSION, EMBEDING_DIMENSION, FFN_DIMENSION * 4,//fp32
-        CUTEDataTypeI8I8I32,FUSE_DEQUANT_HADAMARD_QUANTSTAGE1,0);//TODO:will get ffn_up_buf_f32_absmax
+        CUTEDataTypeI8I8I32,FUSE_DEQUANT_HADAMARD_QUANTSTAGE1,0);
 
     smoothquant(ffn_up_buf_f32,SEQ_LEN, FFN_DIMENSION,ffn_up_buf_q8, ffn_up_buf_q8_scale, false);
     //ffn_down
     matmul_cute(SEQ_LEN, EMBEDING_DIMENSION, FFN_DIMENSION,
-        ffn_up_buf_f32, ffn_down_weight, hidden_states_output,
+        ffn_up_buf_f32, ffn_down_weight, hidden_states_output,proj_o_buf_f32,NULL,//proj_o_buf_f32 == identity == hidden_states_output
         ffn_up_buf_q8_scale,ffn_down_scale,SCALE_TYPE_PERTOKEN_A_PERTENSOR_B,
         EMBEDING_DIMENSION, FFN_DIMENSION, EMBEDING_DIMENSION * 4,//fp32
-        CUTEDataTypeI8I8I32,FUSE_DEQUANT_HADAMARD_QUANTSTAGE1,0);
+        CUTEDataTypeI8I8I32,FUSE_DEQUANT_RESADD,0);
 
 
     return 0;
