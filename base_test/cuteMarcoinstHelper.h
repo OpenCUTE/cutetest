@@ -163,15 +163,15 @@ uint64_t issue_cute_conv_marco_inst(uint64_t ATensor_Base_Addr,uint64_t ATensor_
 
 uint64_t  issue_cute_matmul_marco_inst(uint64_t ATensor_Base_Addr,uint64_t ATensor_M_Stride,
                                        uint64_t BTensor_Base_Addr,uint64_t BTensor_M_Stride,
+                                       uint64_t BiasTensor_Base_Addr,uint64_t BiasTensor_M_Stride,
                                        uint64_t CTensor_Base_Addr,uint64_t CTensor_M_Stride,
-                                       uint64_t DTensor_Base_Addr,uint64_t DTensor_M_Stride,
                                        uint64_t M,uint64_t N,uint64_t K,
                                        uint64_t element_type,uint64_t bias_type,uint64_t transpose_result,uint64_t matmul_m_index)
 {
     issue_cute_config_ATensor(ATensor_Base_Addr,ATensor_M_Stride);
     issue_cute_config_BTensor(BTensor_Base_Addr,BTensor_M_Stride);
-    issue_cute_config_CTensor(CTensor_Base_Addr,CTensor_M_Stride);
-    issue_cute_config_DTensor(DTensor_Base_Addr,DTensor_M_Stride);
+    issue_cute_config_CTensor(BiasTensor_Base_Addr,BiasTensor_M_Stride);
+    issue_cute_config_DTensor(CTensor_Base_Addr,CTensor_M_Stride);
     issue_cute_config_MNK_KERNALSTRIDE(M,N,K,0);
     issue_cute_config_MatMul(element_type,bias_type,transpose_result,matmul_m_index);
     return issue_cute_marco_inst();
