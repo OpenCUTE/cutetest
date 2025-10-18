@@ -1,3 +1,6 @@
 *.dump
 *.riscv
 *.out
+**/tmp
+**/log
+**/build

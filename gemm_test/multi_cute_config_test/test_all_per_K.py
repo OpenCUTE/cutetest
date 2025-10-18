@@ -11,7 +11,7 @@ tops_64GB   = [8,16,32,64]
 def run_command(x, progress, total, lock):
     process_name = current_process().name
     print(f"{process_name}: 开始执行 cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose.riscv")
-    root_dir = "../../../../" # chipyard路径
+    root_dir = "../../../../../" # chipyard路径
     for task in [["8GB",tops_8GB], ["16GB",tops_16GB], ["32GB",tops_32GB], ["64GB",tops_64GB]]:
         type = task[0]
         for i in range(4):
@@ -19,17 +19,17 @@ def run_command(x, progress, total, lock):
             # 创建一个临时的bash脚本来执行所有命令
             script_content = f"""
             source {root_dir}env.sh
-            (set -o pipefail &&  {root_dir}sims/verilator/simulator-chipyard.harness-CUTE{tops[i]}TopsConfig\
+            (set -o pipefail &&  ./build/simulator-chipyard.harness-CUTE{tops[i]}TopsConfig\
                 +permissive \
-                +dramsim +dramsim_ini_dir={root_dir}generators/cute/cutetest/dramsim_config/dramsim2_ini_{type}_per_s +max-cycles=50000000 +loadmem={root_dir}generators/cute/cutetest/matmul/cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose.riscv     \
+                +dramsim +dramsim_ini_dir=../../dramsim_config/dramsim2_ini_{type}_per_s +max-cycles=50000000 +loadmem=../cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose.riscv     \
                 +verbose \
                 +permissive-off \
-                {root_dir}generators/cute/cutetest/gemm_test/cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose.riscv \
+                ../cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose.riscv \
                 \
-                </dev/null 2> >(spike-dasm > /dev/null) | tee {root_dir}sims/verilator/output/multi_cute_config_gemm_test/cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose_{type}_{tops[i]}Tops.log)
+                </dev/null 2> >(spike-dasm > /dev/null) | tee ./log/cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose_{type}_{tops[i]}Tops.log)
             """
 
-            script_path = f"{root_dir}tmp/mat512_{x}.sh"
+            script_path = f"./tmp/{tops[i]}Tops_{type}ddr_mat512_512_{x*256}.sh"
             with open(script_path, "w") as script_file:
                 script_file.write(script_content)
 
@@ -37,9 +37,9 @@ def run_command(x, progress, total, lock):
             os.chmod(script_path, 0o755)
 
             # 执行bash脚本
-            subprocess.run(script_path, shell=True, executable="/bin/bash")
+            # subprocess.run(script_path, shell=True, executable="/bin/bash")
             
-            print(f"{process_name}: 完成执行 {tops[i]}Tops_{type}ddr_cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose.riscv")
+            print(f"{process_name}: 完成执行 {tops[i]}Tops_{type}ddr_cute_Matmul_mnk_512_512_{x*256}")
 
     # 更新进度
     with lock:
