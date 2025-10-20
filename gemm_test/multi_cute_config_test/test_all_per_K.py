@@ -3,10 +3,11 @@ from multiprocessing import Pool, current_process, Manager
 import subprocess
 
 bus_width = [8 ,16, 32, 64]
-tops_8GB    = [1,2,4,8]
-tops_16GB   = [2,4,8,16]
-tops_32GB   = [4,8,16,32]
-tops_64GB   = [8,16,32,64]
+SCP_size = [64, 128, 256, 512]
+tops_8GB    = ["05","1","2","4"]
+tops_16GB   = ["1","2","4","8"]
+tops_32GB   = ["2","4","8","16"]
+tops_64GB   = ["4","8","16","32"]
 
 def run_command(x, progress, total, lock):
     process_name = current_process().name
@@ -19,7 +20,7 @@ def run_command(x, progress, total, lock):
             # 创建一个临时的bash脚本来执行所有命令
             script_content = f"""
             source {root_dir}env.sh
-            (set -o pipefail &&  ./build/simulator-chipyard.harness-CUTE{tops[i]}TopsConfig\
+            (set -o pipefail &&  ./build/simulator-chipyard.harness-CUTE{tops[i]}TopsSCP{SCP_size[i]}Config\
                 +permissive \
                 +dramsim +dramsim_ini_dir=../../dramsim_config/dramsim2_ini_{type}_per_s +max-cycles=50000000 +loadmem=../cute_Matmul_mnk_512_512_{x*256}_zeroinit_transpose.riscv     \
                 +verbose \

@@ -92,16 +92,18 @@ void issue_cute_config_DTensor(uint64_t DTensor_Base_Addr,uint64_t DTensor_M_Str
 //数值范围检测M N K,16384
 void issue_cute_config_MNK_KERNALSTRIDE(uint64_t M,uint64_t N,uint64_t K,uint64_t kernel_stride)
 {
+    int t;
     M = M & 0xFFFF;
     N = N & 0xFFFF;
     K = K & 0xFFFF;
     uint64_t cfgData1 = M | (N << 20) | (K << 40);
-    YGJK_INS_XRR(0, cfgData1, kernel_stride, CUTE_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS);
+    YGJK_INS_RRR(t, cfgData1, kernel_stride, CUTE_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS);
 }
 
 void issue_cute_config_CONV(uint64_t element_type,uint64_t bias_type,uint64_t transpose_result,uint64_t conv_stride,uint64_t conv_oh_max,uint64_t conv_ow_max,
                                     uint64_t kernel_size,uint64_t conv_oh_per_add,uint64_t conv_ow_per_add,uint64_t conv_oh_index,uint64_t conv_ow_index)
 {
+    int t;
     element_type = element_type & 0xFF;
     bias_type = bias_type & 0xFF;
     transpose_result = transpose_result & 0xFF;
@@ -115,11 +117,12 @@ void issue_cute_config_CONV(uint64_t element_type,uint64_t bias_type,uint64_t tr
     conv_ow_index = conv_ow_index & 0x7FFF;
     uint64_t cfgData1 = element_type | (bias_type << 8) | (transpose_result << 16) | (conv_stride << 24) | (conv_oh_max << 32) | (conv_ow_max << 48);
     uint64_t cfgData2 = kernel_size  | (conv_oh_per_add << 4) | (conv_ow_per_add << 19) | (conv_oh_index << 34) | (conv_ow_index << 49);
-    YGJK_INS_XRR(0, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
+    YGJK_INS_RRR(t, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
 }
 
 void issue_cute_config_MatMul(uint64_t element_type,uint64_t bias_type,uint64_t transpose_result,uint64_t current_M_index)
 {
+    int t;
     element_type = element_type & 0xFF;
     bias_type = bias_type & 0xFF;
     transpose_result = transpose_result & 0xFF;
@@ -133,7 +136,7 @@ void issue_cute_config_MatMul(uint64_t element_type,uint64_t bias_type,uint64_t 
     uint64_t conv_ow_index = current_M_index;
     uint64_t cfgData1 = element_type | (bias_type << 8) | (transpose_result << 16) | (conv_stride << 24) | (conv_oh_max << 32) | (conv_ow_max << 48);
     uint64_t cfgData2 = kernel_size  | (conv_oh_per_add << 4) | (conv_ow_per_add << 19) | (conv_oh_index << 34) | (conv_ow_index << 49);
-    YGJK_INS_XRR(0, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
+    YGJK_INS_RRR(t, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
 }
 
 uint64_t issue_cute_marco_inst()
