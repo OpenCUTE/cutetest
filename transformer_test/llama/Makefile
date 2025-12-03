@@ -46,6 +46,26 @@ PROGRAMS = llama3_1B
 
 Cpu_PROGRAMS = llama3_1B_cpu
 
+
+NUMBERS := $(shell seq 1 11)
+
+NEWPROGRAMS :=
+$(foreach i, $(NUMBERS), \
+    $(eval NEWPROGRAMS += llama3_1B_$(i)) \
+)
+
+NOFUSENEWPROGRAMS :=
+$(foreach i, $(NUMBERS), \
+    $(eval NOFUSENEWPROGRAMS += llama3_1B_$(i)_nofuse) \
+)
+
+NOTCMNEWPROGRAMS :=
+$(foreach i, $(NUMBERS), \
+    $(eval NOFUSENEWPROGRAMS += llama3_1B_$(i)_notcm) \
+)
+
+PROGRAMS += ${NEWPROGRAMS} ${NOFUSENEWPROGRAMS} ${NOTCMNEWPROGRAMS}
+
 .DEFAULT_GOAL := default
 
 

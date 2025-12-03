@@ -35,7 +35,7 @@ CFLAGS += -specs=$(libgloss_specs)
 LDFLAGS += -specs=$(libgloss_specs)
 
  
-PROGRAMS = 
+PROGRAMS = cute_Matmul_mnk_256_256_64_zeroinit_transpose
 NUMBERS := $(shell seq 1 64)
 
 NEWPROGRAMS :=

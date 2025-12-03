@@ -34,7 +34,7 @@ typedef uint32_t acc_scale_t_bits;
 #define IGELU 3
 #define SOFTMAX 4
 
-#define CUTE_INT8 1
+#define CUTE_INT8 0
 
 void CUTE_CONV_3_3_S2_AUTO(ConvParams params,const elem_t * input,const elem_t * weights,const acc_t * bias,elem_t * output,int act_type);//完成二维张量的切分，确定CUTE任务的切分
 void CUTE_CONV_3_3_S1_AUTO(ConvParams params,const elem_t * input,const elem_t * weights,const acc_t * bias,elem_t * output,int act_type);
@@ -146,7 +146,11 @@ static void resadd_cpu_greater(const size_t I, const size_t J,
         }
     }
 }
-
+int need_do_residual_relu = 0;
+//no residual = 0
+//do residual relu normal = 1
+//do residual but input need >> 1 = 2
+//do residual but input need << 1 = 3
 
 void scale_after_operation_64_64(acc_t input[64][64], int dim_i,int dim_j,elem_t * output,int scale_shift,uint64_t stride_c)
 {
@@ -1765,20 +1769,7 @@ static void tiled_conv_CUTE_auto(ConvParams params,
 
 int main (int argc, char * argv[]) {
 
-    /*Hello world from core 0???*/
-  uint64_t marchid = read_csr(marchid);
-  const char* march = get_march(marchid);
-  printf("Hello world from core 0, a %s\n", march);
-  //输出mstatus,16进制
-    unsigned long mstatus;
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
- //设置mstatus.VS = 1，其中mstatus[10:9]为mstatus.VS
-    asm volatile ("csrw mstatus, %0" : : "r" (mstatus | (1 << 9)));
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
-    printf("ptr is %x\n", CUTE_result);
-    printf("ptr is %x\n", CUTE_result[CUTE_result_index]);
+
 
     // conv_2
     uint64_t start = read_cycles();
@@ -1786,14 +1777,14 @@ int main (int argc, char * argv[]) {
     uint64_t end = read_cycles();
     printf("conv_51 cycles: %lu \n", end - start);
 
-    int8_t temp = 0;
-    for (int i = 0; i < sizeof(output); i++)
-    {
-        temp += output[i];
-    }
-    printf("output_sum: %d\n", temp);
+    // int8_t temp = 0;
+    // for (int i = 0; i < sizeof(output); i++)
+    // {
+    //     temp += output[i];
+    // }
+    // printf("output_sum: %d\n", temp);
 
-    printf("PASS\n");
+    // printf("PASS\n");
     exit(0);
 }
 

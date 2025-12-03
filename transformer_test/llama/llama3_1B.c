@@ -844,7 +844,7 @@ static void matmul_cute(size_t DIM_M, size_t DIM_N, size_t DIM_K,
   {
     //NO_ACTIVATION
     // printf("AFTER OPS= %s\n",activation_name(after_ops));
-    issue_cute_matmul_marco_inst(A, stride_A, B, stride_B, NULL, 0, C, stride_C, DIM_M, DIM_N, DIM_K, datatype, TaskTypeTensorZeroLoad, transpose_result, 0);
+    CUTE_TASK_END(issue_cute_matmul_marco_inst(A, stride_A, B, stride_B, NULL, 0, C, stride_C, DIM_M, DIM_N, DIM_K, datatype, TaskTypeTensorZeroLoad, transpose_result, 0));
   }
 }
 

@@ -261,8 +261,8 @@ void fuse_ops_DEQUANT_ROPE_BF16CVRT(void * input,void *output,void * input_scale
             // 存储结果
 
             // 转化为fp16再存储
-            vfloat16m2_t real_out_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(real_out, vl);
-            vfloat16m2_t imag_out_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(imag_out, vl);
+            vfloat16m2_t real_out_fp16 = __riscv_vfncvt_f_f_w_f16m2(real_out, vl);
+            vfloat16m2_t imag_out_fp16 = __riscv_vfncvt_f_f_w_f16m2(imag_out, vl);
             __riscv_vse16_v_f16m2(output_row + k, real_out_fp16, vl);
             __riscv_vse16_v_f16m2(output_row + half_dim + k, imag_out_fp16, vl);
         }
@@ -302,7 +302,7 @@ void fuse_ops_DEQUANT_BF16CVRT(void * input,void *output,void * input_scale,void
 
             vfloat32m4_t deq_done = __riscv_vfmul_vf_f32m4(__riscv_vfcvt_f_x_v_f32m4(input_vec, vl), scale, vl);
 
-            vfloat16m2_t deq_done_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(deq_done, vl);
+            vfloat16m2_t deq_done_fp16 = __riscv_vfncvt_f_f_w_f16m2(deq_done, vl);
             __riscv_vse16_v_f16m2(output_row + k, deq_done_fp16, vl);
         }
     }
@@ -423,7 +423,7 @@ inline void softmax_cvrtfp16(void* x, void* y, void* bitmask_ptr, int M, int N,u
             vl = __riscv_vsetvl_e32m4(avl);
             vfloat32m4_t vec = __riscv_vle32_v_f32m4(&input_row_f32[j], vl);
             vfloat32m4_t normalized = __riscv_vfmul_vv_f32m4(vec, inv_sum_exp_vec, vl);
-            vfloat16m2_t normalized_fp16 = __riscv_vfncvt_rod_f_f_w_f16m2(normalized, vl);
+            vfloat16m2_t normalized_fp16 = __riscv_vfncvt_f_f_w_f16m2(normalized, vl);
             __riscv_vse16_v_f16m2((_Float16*)&output_row_f16[j], normalized_fp16, vl);
         }
     }

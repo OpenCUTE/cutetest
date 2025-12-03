@@ -1,0 +1,3 @@
+
+                (set -o pipefail &&  ./build/simulator-chipyard.harness-CUTE4TopsShuttle512D512V512M512Sysbus512Membus1CoreConfig                    +permissive                     +dramsim +dramsim_ini_dir=../../dramsim_config/dramsim2_ini_48GB_per_s +max-cycles=800000000 +loadmem=../vec_ops_conv_50_notcm.riscv                         +verbose                     +permissive-off                     ../vec_ops_conv_50_notcm.riscv                                         </dev/null  | tee ./log/conv_50_48GB_notcm_task.log)
+                

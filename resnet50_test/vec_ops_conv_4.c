@@ -34,7 +34,7 @@ typedef uint32_t acc_scale_t_bits;
 #define IGELU 3
 #define SOFTMAX 4
 
-#define CUTE_INT8 1
+#define CUTE_INT8 0
 
 void CUTE_CONV_3_3_S2_AUTO(ConvParams params,const elem_t * input,const elem_t * weights,const acc_t * bias,elem_t * output,int act_type);//完成二维张量的切分，确定CUTE任务的切分
 void CUTE_CONV_3_3_S1_AUTO(ConvParams params,const elem_t * input,const elem_t * weights,const acc_t * bias,elem_t * output,int act_type);
@@ -144,6 +144,90 @@ static void resadd_cpu_greater(const size_t I, const size_t J,
 
             *c = result;
         }
+    }
+}
+int need_do_residual_relu = 1;
+//no residual = 0
+//do residual relu normal = 1
+//do residual but input need >> 1 = 2
+//do residual but input need << 1 = 3
+#include <riscv_vector.h>
+
+void fuse_shift_scale_resadd_relu_dim_j_64(int32_t * input, int8_t * output, uint64_t stride_input, uint64_t stride_output,uint64_t shift_scale, uint64_t dim_I,int8_t *residual)
+{
+    // Implementation goes here
+    for(int i = 0;i<dim_I;i++)
+    {
+        int32_t* row_input = (void*)input + i*stride_input;
+        int8_t*  row_output = (void*)output + i*stride_output;
+        int8_t*  row_residual = (void*)residual + i*stride_output;
+
+        int vl = 64;
+        // 1. load int32
+        vint32m4_t vec_input = __riscv_vle32_v_i32m4(row_input, vl);
+        // 2. right shift
+        vint8m1_t vec_shifted = __riscv_vnclip_wx_i8m1(__riscv_vnclip_wx_i16m2(vec_input,shift_scale,__RISCV_VXRM_RNE,vl), 0,__RISCV_VXRM_RNE, vl);
+        // 3. load residual
+        vint8m1_t vec_residual = __riscv_vle8_v_i8m1(row_residual, vl);
+        // 4. add
+        vint8m1_t vec_added = __riscv_vadd_vv_i8m1(vec_shifted, vec_residual, vl);
+        // 5. relu clamp to [0,127]
+        vec_added = __riscv_vmax_vx_i8m1(vec_added, 0, vl);
+        vec_added = __riscv_vmin_vx_i8m1(vec_added, 127, vl);
+        // 6. store output
+        __riscv_vse8_v_i8m1(row_output, vec_added, vl);
+    }
+}
+
+void fuse_shift_scale_A_right_scale_1_resadd_relu_dim_j_64(int32_t * input, int8_t * output, uint64_t stride_input, uint64_t stride_output,uint64_t shift_scale, uint64_t dim_I,int8_t *residual)
+{
+    // Implementation goes here
+    for(int i = 0;i<dim_I;i++)
+    {
+        int32_t* row_input = (void*)input + i*stride_input;
+        int8_t*  row_output = (void*)output + i*stride_output;
+        int8_t*  row_residual = (void*)residual + i*stride_output;
+
+        int vl = 64;
+        // 1. load int32
+        vint32m4_t vec_input = __riscv_vle32_v_i32m4(row_input, vl);
+        // 2. right shift
+        vint8m1_t vec_shifted = __riscv_vnclip_wx_i8m1(__riscv_vnclip_wx_i16m2(vec_input,shift_scale,__RISCV_VXRM_RNE,vl), 1,__RISCV_VXRM_RNE, vl);
+        // 3. load residual
+        vint8m1_t vec_residual = __riscv_vle8_v_i8m1(row_residual, vl);
+        // 4. add
+        vint8m1_t vec_added = __riscv_vadd_vv_i8m1(vec_shifted, vec_residual, vl);
+        // 5. relu clamp to [0,127]
+        vec_added = __riscv_vmax_vx_i8m1(vec_added, 0, vl);
+        vec_added = __riscv_vmin_vx_i8m1(vec_added, 127, vl);
+        // 6. store output
+        __riscv_vse8_v_i8m1(row_output, vec_added, vl);
+    }
+}
+
+void fuse_shift_scale_A_left_scale_1_resadd_relu_dim_j_64(int32_t * input, int8_t * output, uint64_t stride_input, uint64_t stride_output,uint64_t shift_scale, uint64_t dim_I,int8_t *residual)
+{
+    // Implementation goes here
+    for(int i = 0;i<dim_I;i++)
+    {
+        int32_t* row_input = (void*)input + i*stride_input;
+        int8_t*  row_output = (void*)output + i*stride_output;
+        int8_t*  row_residual = (void*)residual + i*stride_output;
+
+        int vl = 64;
+        // 1. load int32
+        vint32m4_t vec_input = __riscv_vle32_v_i32m4(row_input, vl);
+        // 2. right shift
+        vint8m1_t vec_shifted = __riscv_vsll_vx_i8m1(__riscv_vnclip_wx_i8m1(__riscv_vnclip_wx_i16m2(vec_input,shift_scale,__RISCV_VXRM_RNE,vl), 0,__RISCV_VXRM_RNE, vl),1,vl);
+        // 3. load residual
+        vint8m1_t vec_residual = __riscv_vle8_v_i8m1(row_residual, vl);
+        // 4. add
+        vint8m1_t vec_added = __riscv_vadd_vv_i8m1(vec_shifted, vec_residual, vl);
+        // 5. relu clamp to [0,127]
+        vec_added = __riscv_vmax_vx_i8m1(vec_added, 0, vl);
+        vec_added = __riscv_vmin_vx_i8m1(vec_added, 127, vl);
+        // 6. store output
+        __riscv_vse8_v_i8m1(row_output, vec_added, vl);
     }
 }
 
@@ -1302,8 +1386,23 @@ void CUTE_CONV_3_3_S2_AUTO(ConvParams params,const elem_t * input,const elem_t *
 
     //afater_operation
     void (*afater_u_kernel_operation)(int32_t * , int8_t * , uint64_t , uint64_t ,uint64_t , uint64_t ) = act_type==RELU?scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_relu_shift_x:scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_shift_x;
-    void (*afater_operation)(acc_t *,int,int,elem_t *,int,int) = act_type==RELU?scale_after_operation_64_64_relu:scale_after_operation_64_64;
-    //遍历batch
+
+    // int need_do_residual_relu = 1;
+    //no residual = 0
+    //do residual relu normal = 1
+    //do residual but input need >> 1 = 2
+    //do residual but input need << 1 = 3
+
+    if(need_do_residual_relu==1)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==2)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_right_scale_1_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==3)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_left_scale_1_resadd_relu_dim_j_64;
+    }
     for(int i=0;i<batches;i++)
     {
         //input = [ih,iw][ic]
@@ -1418,8 +1517,23 @@ void CUTE_CONV_3_3_S1_AUTO(ConvParams params,const elem_t * input,const elem_t *
 
     //afater_operation
     void (*afater_u_kernel_operation)(int32_t * , int8_t * , uint64_t , uint64_t ,uint64_t , uint64_t ) = act_type==RELU?scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_relu_shift_x:scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_shift_x;
-    void (*afater_operation)(acc_t *,int,int,elem_t *,int,int) = act_type==RELU?scale_after_operation_64_64_relu:scale_after_operation_64_64;
-    //遍历batch
+
+    // int need_do_residual_relu = 1;
+    //no residual = 0
+    //do residual relu normal = 1
+    //do residual but input need >> 1 = 2
+    //do residual but input need << 1 = 3
+
+    if(need_do_residual_relu==1)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==2)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_right_scale_1_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==3)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_left_scale_1_resadd_relu_dim_j_64;
+    }
     for(int i=0;i<batches;i++)
     {
         //input = [ih,iw][ic]
@@ -1525,8 +1639,23 @@ void CUTE_CONV_1_1_S2_AUTO(ConvParams params,const elem_t * input,const elem_t *
 
     //afater_operation
     void (*afater_u_kernel_operation)(int32_t * , int8_t * , uint64_t , uint64_t ,uint64_t , uint64_t ) = act_type==RELU?scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_relu_shift_x:scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_shift_x;
-    void (*afater_operation)(acc_t *,int,int,elem_t *,int,int) = act_type==RELU?scale_after_operation_64_64_relu:scale_after_operation_64_64;
-    //遍历batch
+
+    // int need_do_residual_relu = 1;
+    //no residual = 0
+    //do residual relu normal = 1
+    //do residual but input need >> 1 = 2
+    //do residual but input need << 1 = 3
+
+    if(need_do_residual_relu==1)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==2)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_right_scale_1_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==3)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_left_scale_1_resadd_relu_dim_j_64;
+    }
     for(int i=0;i<batches;i++)
     {
         //input = [ih,iw][ic]
@@ -1636,9 +1765,24 @@ void CUTE_CONV_1_1_S1_AUTO(ConvParams params,const elem_t * input,const elem_t *
     uint64_t output_batch_stride = params.out_channels * params.out_col_dim * params.out_row_dim;
 
     //afater_operation
-    void (*afater_u_kernel_operation)(int32_t * , int8_t * , uint64_t , uint64_t ,uint64_t , uint64_t ) = act_type==RELU?scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_relu_shift_x:scale_after_operation_i32_to_i8_DimI_x_DimJ_64_ukernel_shift_x;
-    void (*afater_operation)(acc_t *,int,int,elem_t *,int,int) = act_type==RELU?scale_after_operation_64_64_relu:scale_after_operation_64_64;
-    //遍历batch
+    void (*afater_u_kernel_operation)(int32_t * , int8_t * , uint64_t , uint64_t ,uint64_t , uint64_t , void *);
+
+    // int need_do_residual_relu = 1;
+    //no residual = 0
+    //do residual relu normal = 1
+    //do residual but input need >> 1 = 2
+    //do residual but input need << 1 = 3
+
+    if(need_do_residual_relu==1)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==2)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_right_scale_1_resadd_relu_dim_j_64;
+    }else if(need_do_residual_relu==3)
+    {
+        afater_u_kernel_operation = fuse_shift_scale_A_left_scale_1_resadd_relu_dim_j_64;
+    }
     // batches = 1;//TODO:
     for(int i=0;i<batches;i++)
     {
@@ -1665,6 +1809,7 @@ void CUTE_CONV_1_1_S1_AUTO(ConvParams params,const elem_t * input,const elem_t *
         uint64_t wait_after_operation_cute_task_id_pre = 0;
 
         elem_t *VECTASK_C_Addr = output;
+        elem_t  *Residual_Addr = residual;
         uint64_t VECTASK_C_stride = params.out_channels;
         uint64_t VECTASK_CUTE_result_stride = params.out_channels*4;//int32->int8
         int VECTASK_DIM_I = 64;
@@ -1710,13 +1855,14 @@ void CUTE_CONV_1_1_S1_AUTO(ConvParams params,const elem_t * input,const elem_t *
                 {
                     CUTE_TASK_END(wait_after_operation_cute_task_id_pre);
                     // afater_operation(CUTE_result[VECTASK_RESULT_INDEX],VECTASK_DIM_I,VECTASK_DIM_J,VECTASK_C_Addr,params.output_scale_shift,CONV_Matrix_N);
-                    afater_u_kernel_operation(CUTE_result[VECTASK_RESULT_INDEX],VECTASK_C_Addr,CUTE_TILE_Tensor_N*4,CONV_Matrix_N,params.output_scale_shift,VECTASK_DIM_I);
+                    afater_u_kernel_operation(CUTE_result[VECTASK_RESULT_INDEX],VECTASK_C_Addr,CUTE_TILE_Tensor_N*4,CONV_Matrix_N,params.output_scale_shift,VECTASK_DIM_I,Residual_Addr);
                 }
                 have_after_operation = true;
                 wait_after_operation_cute_task_id_pre = wait_after_operation_cute_task_id;
                 VECTASK_RESULT_INDEX = CUTE_result_index;
                 CUTE_result_index = CUTE_result_index^1;
-                VECTASK_C_Addr = output + CUTE_TILE_Tensor_M*CONV_Current_Tile_M*VECTASK_C_stride+CONV_Current_Tile_N*CUTE_TILE_Tensor_N + output_batch_stride*i;
+                VECTASK_C_Addr = output +  CUTE_TILE_Tensor_M*CONV_Current_Tile_M*VECTASK_C_stride+CONV_Current_Tile_N*CUTE_TILE_Tensor_N + output_batch_stride*i;
+                Residual_Addr = residual + CUTE_TILE_Tensor_M*CONV_Current_Tile_M*VECTASK_C_stride+CONV_Current_Tile_N*CUTE_TILE_Tensor_N + output_batch_stride*i;
                 VECTASK_DIM_I = Application_M;
                 VECTASK_DIM_J = Application_N;
             }
@@ -1725,11 +1871,10 @@ void CUTE_CONV_1_1_S1_AUTO(ConvParams params,const elem_t * input,const elem_t *
         {
             // afater_operation(CUTE_result[VECTASK_RESULT_INDEX],VECTASK_DIM_I,VECTASK_DIM_J,VECTASK_C_Addr,params.output_scale_shift,CONV_Matrix_N);
             CUTE_TASK_END(wait_after_operation_cute_task_id);        
-            afater_u_kernel_operation(CUTE_result[VECTASK_RESULT_INDEX],VECTASK_C_Addr,CUTE_TILE_Tensor_N*4,CONV_Matrix_N,params.output_scale_shift,VECTASK_DIM_I);
+            afater_u_kernel_operation(CUTE_result[VECTASK_RESULT_INDEX],VECTASK_C_Addr,CUTE_TILE_Tensor_N*4,CONV_Matrix_N,params.output_scale_shift,VECTASK_DIM_I,Residual_Addr);
         }
     }
 }
-
 static void tiled_conv_CUTE_auto(ConvParams params,
         const elem_t * input,
         const elem_t * weights,
@@ -1765,20 +1910,7 @@ static void tiled_conv_CUTE_auto(ConvParams params,
 
 int main (int argc, char * argv[]) {
 
-    /*Hello world from core 0???*/
-  uint64_t marchid = read_csr(marchid);
-  const char* march = get_march(marchid);
-  printf("Hello world from core 0, a %s\n", march);
-  //输出mstatus,16进制
-    unsigned long mstatus;
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
- //设置mstatus.VS = 1，其中mstatus[10:9]为mstatus.VS
-    asm volatile ("csrw mstatus, %0" : : "r" (mstatus | (1 << 9)));
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
-    printf("ptr is %x\n", CUTE_result);
-    printf("ptr is %x\n", CUTE_result[CUTE_result_index]);
+
 
     // conv_2
     uint64_t start = read_cycles();
@@ -1786,14 +1918,14 @@ int main (int argc, char * argv[]) {
     uint64_t end = read_cycles();
     printf("conv_4 cycles: %lu \n", end - start);
 
-    int8_t temp = 0;
-    for (int i = 0; i < sizeof(output); i++)
-    {
-        temp += output[i];
-    }
-    printf("output_sum: %d\n", temp);
+    // int8_t temp = 0;
+    // for (int i = 0; i < sizeof(output); i++)
+    // {
+    //     temp += output[i];
+    // }
+    // printf("output_sum: %d\n", temp);
 
-    printf("PASS\n");
+    // printf("PASS\n");
     exit(0);
 }
 

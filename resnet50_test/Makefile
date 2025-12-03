@@ -40,6 +40,26 @@ LDFLAGS += -specs=$(libgloss_specs)
 # PROGRAMS = conv_MMA_padding_scalar_10  conv_MMA_padding_scalar_23 conv_MMA_padding_scalar_11  conv_MMA_padding_scalar_3 conv_MMA_padding_scalar_12  conv_MMA_padding_scalar_4 conv_MMA_padding_scalar_13  conv_MMA_padding_scalar_5 conv_MMA_padding_scalar_14  conv_MMA_padding_scalar_6 conv_MMA_padding_scalar_15  conv_MMA_padding_scalar_7 conv_MMA_padding_scalar_16  conv_MMA_padding_scalar_8 conv_MMA_padding_scalar_17  conv_MMA_padding_scalar_9 conv_MMA_padding_scalar_18  conv_MMA_padding_scalar_19  conv_MMA_padding_scalar_2   conv_MMA_padding_scalar_20  conv_MMA_padding_scalar_21  conv_MMA_padding_scalar_1     conv_MMA_padding_scalar_22
 PROGRAMS = resnet50_cpu_int8_CUTE_chipyard_run vec_ops_conv_2 vec_ops_conv_3 vec_ops_conv_4 vec_ops_conv_5 vec_ops_conv_6 vec_ops_conv_7 vec_ops_conv_8 vec_ops_conv_9 vec_ops_conv_10 vec_ops_conv_11 vec_ops_conv_12 vec_ops_conv_13 vec_ops_conv_14 vec_ops_conv_15 vec_ops_conv_16 vec_ops_conv_17 vec_ops_conv_18 vec_ops_conv_19 vec_ops_conv_20 vec_ops_conv_21 vec_ops_conv_22 vec_ops_conv_23 vec_ops_conv_24 vec_ops_conv_25 vec_ops_conv_26 vec_ops_conv_27 vec_ops_conv_28 vec_ops_conv_29 vec_ops_conv_30 vec_ops_conv_31 vec_ops_conv_32 vec_ops_conv_33 vec_ops_conv_34 vec_ops_conv_35 vec_ops_conv_36 vec_ops_conv_37 vec_ops_conv_38 vec_ops_conv_39 vec_ops_conv_40 vec_ops_conv_41 vec_ops_conv_42 vec_ops_conv_43 vec_ops_conv_44 vec_ops_conv_45 vec_ops_conv_46 vec_ops_conv_47 vec_ops_conv_48 vec_ops_conv_49 vec_ops_conv_50 vec_ops_conv_51 vec_ops_conv_52 vec_ops_conv_53
 
+# PROGRAMS = resnet50_cpu_int8_CUTE_chipyard_run vec_ops_conv_2 vec_ops_conv_3 vec_ops_conv_4 vec_ops_conv_5 vec_ops_conv_6 vec_ops_conv_7 vec_ops_conv_8 vec_ops_conv_9 vec_ops_conv_10 vec_ops_conv_11 vec_ops_conv_12 vec_ops_conv_13 vec_ops_conv_14 vec_ops_conv_15 vec_ops_conv_16 vec_ops_conv_17 vec_ops_conv_18 vec_ops_conv_19 vec_ops_conv_20 vec_ops_conv_21 vec_ops_conv_22 vec_ops_conv_23 vec_ops_conv_24 vec_ops_conv_25 vec_ops_conv_26 vec_ops_conv_27 vec_ops_conv_28 vec_ops_conv_29 vec_ops_conv_30 vec_ops_conv_31 vec_ops_conv_32 vec_ops_conv_33 vec_ops_conv_34 vec_ops_conv_35 vec_ops_conv_36 vec_ops_conv_37 vec_ops_conv_38 vec_ops_conv_39 vec_ops_conv_40 vec_ops_conv_41 vec_ops_conv_42 vec_ops_conv_43 vec_ops_conv_44 vec_ops_conv_45 vec_ops_conv_46 vec_ops_conv_47 vec_ops_conv_48 vec_ops_conv_49 vec_ops_conv_50 vec_ops_conv_51 vec_ops_conv_52 vec_ops_conv_53
+
+NUMBERS := $(shell seq 2 53)
+
+resnet_nofuse :=
+$(foreach i, $(NUMBERS), \
+    $(eval X = $(shell echo $$(($i)))) \
+    $(eval resnet_nofuse += vec_ops_conv_$(X)_nofuse) \
+)
+
+PROGRAMS += $(resnet_nofuse)
+
+resnet_notcm :=
+$(foreach i, $(NUMBERS), \
+    $(eval X = $(shell echo $$(($i)))) \
+    $(eval resnet_notcm += vec_ops_conv_$(X)_notcm) \
+)
+
+PROGRAMS += $(resnet_notcm)
+
 .DEFAULT_GOAL := default
 
 

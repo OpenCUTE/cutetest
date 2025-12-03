@@ -1,0 +1,3 @@
+
+            (set -o pipefail &&  ./build/simulator-chipyard.harness-CUTE8TopsSCP256Config                +permissive                 +dramsim +dramsim_ini_dir=../../dramsim_config/dramsim2_ini_32GB_per_s +max-cycles=800000000 +loadmem=../cute_Matmul_mnk_512_512_6912_zeroinit_transpose.riscv                     +verbose                 +permissive-off                 ../cute_Matmul_mnk_512_512_6912_zeroinit_transpose.riscv                                 </dev/null  | tee ./log/cute_Matmul_mnk_512_512_6912_zeroinit_transpose_32GB_8Tops.log)
+            

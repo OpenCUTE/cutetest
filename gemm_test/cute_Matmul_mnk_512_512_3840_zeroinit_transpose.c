@@ -16,18 +16,7 @@ static uint64_t read_cycles() {
 
 int main(void)
 {
-    /*Hello world from core 0???*/
-    uint64_t marchid = read_csr(marchid);
-    const char *march = get_march(marchid);
-    printf("Hello world from core 0, a %s\n", march);
-    // 输出mstatus,16进制
-    unsigned long mstatus;
-    asm volatile("csrr %0, mstatus" : "=r"(mstatus));
-    printf("%lx\n", mstatus);
-    // 设置mstatus.VS = 1，其中mstatus[10:9]为mstatus.VS
-    asm volatile("csrw mstatus, %0" : : "r"(mstatus | (1 << 9)));
-    asm volatile("csrr %0, mstatus" : "=r"(mstatus));
-    printf("%lx\n", mstatus);
+
 
     uint64_t res1 = 1;
     // uint64_t A = input;
@@ -38,7 +27,7 @@ int main(void)
     uint64_t C_Stride = APPLICATION_N * sizeof(c[0][0]);
     // uint64_t D = output;
     uint64_t D_Stride = APPLICATION_N * sizeof(d[0][0]);
-    uint64_t element_type = CUTEDataTypeF16F16F32;
+    uint64_t element_type = CUTEDataTypeI8I8I32;
     uint64_t bias_type = TaskTypeTensorZeroLoad;
     // uint64_t transpose_result = 0;
     uint64_t current_M_index = 0;
@@ -70,18 +59,7 @@ int main(void)
 
     printf("matmul cycles: %lu \n", end - start);
 
-    printf("finish\n");
-    YGJK_INS_RRR(res1, 0, 0, 2);
-    printf("acc time: %ldcycles\n", res1);
-    YGJK_INS_RRR(res1, 0, 0, 5);
-    printf("compute: %ldcycles\n", res1);
-    YGJK_INS_RRR(res1, 0, 0, 3);
-    printf("acc read req: %ld\n", res1);
-    YGJK_INS_RRR(res1, 0, 0, 4);
-    printf("acc write req: %ld\n", res1);
 
-    printf("D Test start\n");
-    printf("Pass!\n");
 
     return 0;
 }

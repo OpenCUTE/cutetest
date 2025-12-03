@@ -34,7 +34,7 @@ typedef uint32_t acc_scale_t_bits;
 #define IGELU 3
 #define SOFTMAX 4
 
-#define CUTE_INT8 1
+#define CUTE_INT8 0
 
 void CUTE_CONV_3_3_S2_AUTO(ConvParams params,const elem_t * input,const elem_t * weights,const acc_t * bias,elem_t * output,int act_type);//完成二维张量的切分，确定CUTE任务的切分
 void CUTE_CONV_3_3_S1_AUTO(ConvParams params,const elem_t * input,const elem_t * weights,const acc_t * bias,elem_t * output,int act_type);
@@ -146,6 +146,92 @@ static void resadd_cpu_greater(const size_t I, const size_t J,
         }
     }
 }
+
+int need_do_residual_relu = 2;
+//no residual = 0
+//do residual relu normal = 1
+//do residual but input need >> 1 = 2
+//do residual but input need << 1 = 3
+#include <riscv_vector.h>
+
+void fuse_shift_scale_resadd_relu_dim_j_64(int32_t * input, int8_t * output, uint64_t stride_input, uint64_t stride_output,uint64_t shift_scale, uint64_t dim_I,int8_t *residual)
+{
+    // Implementation goes here
+    for(int i = 0;i<dim_I;i++)
+    {
+        int32_t* row_input = (void*)input + i*stride_input;
+        int8_t*  row_output = (void*)output + i*stride_output;
+        int8_t*  row_residual = (void*)residual + i*stride_output;
+
+        int vl = 64;
+        // 1. load int32
+        vint32m4_t vec_input = __riscv_vle32_v_i32m4(row_input, vl);
+        // 2. right shift
+        vint8m1_t vec_shifted = __riscv_vnclip_wx_i8m1(__riscv_vnclip_wx_i16m2(vec_input,shift_scale,__RISCV_VXRM_RNE,vl), 0,__RISCV_VXRM_RNE, vl);
+        // 3. load residual
+        vint8m1_t vec_residual = __riscv_vle8_v_i8m1(row_residual, vl);
+        // 4. add
+        vint8m1_t vec_added = __riscv_vadd_vv_i8m1(vec_shifted, vec_residual, vl);
+        // 5. relu clamp to [0,127]
+        vec_added = __riscv_vmax_vx_i8m1(vec_added, 0, vl);
+        vec_added = __riscv_vmin_vx_i8m1(vec_added, 127, vl);
+        // 6. store output
+        __riscv_vse8_v_i8m1(row_output, vec_added, vl);
+    }
+}
+
+void fuse_shift_scale_A_right_scale_1_resadd_relu_dim_j_64(int32_t * input, int8_t * output, uint64_t stride_input, uint64_t stride_output,uint64_t shift_scale, uint64_t dim_I,int8_t *residual)
+{
+    // Implementation goes here
+    for(int i = 0;i<dim_I;i++)
+    {
+        int32_t* row_input = (void*)input + i*stride_input;
+        int8_t*  row_output = (void*)output + i*stride_output;
+        int8_t*  row_residual = (void*)residual + i*stride_output;
+
+        int vl = 64;
+        // 1. load int32
+        vint32m4_t vec_input = __riscv_vle32_v_i32m4(row_input, vl);
+        // 2. right shift
+        vint8m1_t vec_shifted = __riscv_vnclip_wx_i8m1(__riscv_vnclip_wx_i16m2(vec_input,shift_scale,__RISCV_VXRM_RNE,vl), 1,__RISCV_VXRM_RNE, vl);
+        // 3. load residual
+        vint8m1_t vec_residual = __riscv_vle8_v_i8m1(row_residual, vl);
+        // 4. add
+        vint8m1_t vec_added = __riscv_vadd_vv_i8m1(vec_shifted, vec_residual, vl);
+        // 5. relu clamp to [0,127]
+        vec_added = __riscv_vmax_vx_i8m1(vec_added, 0, vl);
+        vec_added = __riscv_vmin_vx_i8m1(vec_added, 127, vl);
+        // 6. store output
+        __riscv_vse8_v_i8m1(row_output, vec_added, vl);
+    }
+}
+
+void fuse_shift_scale_A_left_scale_1_resadd_relu_dim_j_64(int32_t * input, int8_t * output, uint64_t stride_input, uint64_t stride_output,uint64_t shift_scale, uint64_t dim_I,int8_t *residual)
+{
+    // Implementation goes here
+    for(int i = 0;i<dim_I;i++)
+    {
+        int32_t* row_input = (void*)input + i*stride_input;
+        int8_t*  row_output = (void*)output + i*stride_output;
+        int8_t*  row_residual = (void*)residual + i*stride_output;
+
+        int vl = 64;
+        // 1. load int32
+        vint32m4_t vec_input = __riscv_vle32_v_i32m4(row_input, vl);
+        // 2. right shift
+        vint8m1_t vec_shifted = __riscv_vsll_vx_i8m1(__riscv_vnclip_wx_i8m1(__riscv_vnclip_wx_i16m2(vec_input,shift_scale,__RISCV_VXRM_RNE,vl), 0,__RISCV_VXRM_RNE, vl),1,vl);
+        // 3. load residual
+        vint8m1_t vec_residual = __riscv_vle8_v_i8m1(row_residual, vl);
+        // 4. add
+        vint8m1_t vec_added = __riscv_vadd_vv_i8m1(vec_shifted, vec_residual, vl);
+        // 5. relu clamp to [0,127]
+        vec_added = __riscv_vmax_vx_i8m1(vec_added, 0, vl);
+        vec_added = __riscv_vmin_vx_i8m1(vec_added, 127, vl);
+        // 6. store output
+        __riscv_vse8_v_i8m1(row_output, vec_added, vl);
+    }
+}
+
 
 
 void scale_after_operation_64_64(acc_t input[64][64], int dim_i,int dim_j,elem_t * output,int scale_shift,uint64_t stride_c)
@@ -1765,20 +1851,7 @@ static void tiled_conv_CUTE_auto(ConvParams params,
 
 int main (int argc, char * argv[]) {
 
-    /*Hello world from core 0???*/
-  uint64_t marchid = read_csr(marchid);
-  const char* march = get_march(marchid);
-  printf("Hello world from core 0, a %s\n", march);
-  //输出mstatus,16进制
-    unsigned long mstatus;
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
- //设置mstatus.VS = 1，其中mstatus[10:9]为mstatus.VS
-    asm volatile ("csrw mstatus, %0" : : "r" (mstatus | (1 << 9)));
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
-    printf("ptr is %x\n", CUTE_result);
-    printf("ptr is %x\n", CUTE_result[CUTE_result_index]);
+
 
     // conv_2
     uint64_t start = read_cycles();
@@ -1786,14 +1859,14 @@ int main (int argc, char * argv[]) {
     uint64_t end = read_cycles();
     printf("conv_8 cycles: %lu \n", end - start);
 
-    int8_t temp = 0;
-    for (int i = 0; i < sizeof(output); i++)
-    {
-        temp += output[i];
-    }
-    printf("output_sum: %d\n", temp);
+    // int8_t temp = 0;
+    // for (int i = 0; i < sizeof(output); i++)
+    // {
+    //     temp += output[i];
+    // }
+    // printf("output_sum: %d\n", temp);
 
-    printf("PASS\n");
+    // printf("PASS\n");
     exit(0);
 }
 
