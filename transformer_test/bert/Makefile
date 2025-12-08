@@ -2,7 +2,7 @@
 # RISCV Toolchain
 #################################
 
-PREFIX = /opt/autovec-baremetal-rvv/bin/riscv64-unknown-elf-
+PREFIX = riscv64-unknown-elf-
 
 
 GCC = $(PREFIX)gcc
