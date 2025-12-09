@@ -2,7 +2,9 @@
 # RISCV Toolchain
 #################################
 
-PREFIX = riscv64-unknown-elf-
+CUTEROOT = ${PWD}/../..
+RVVTOOLCHAIN = ${CUTEROOT}/tool/riscv
+PREFIX = ${RVVTOOLCHAIN}/bin/riscv64-unknown-elf-
 
 GCC = $(PREFIX)gcc
 CXX = $(PREFIX)g++

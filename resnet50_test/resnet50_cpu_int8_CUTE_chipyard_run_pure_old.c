@@ -1391,18 +1391,7 @@ static void tiled_conv_CUTE_auto(ConvParams params,
 
 int main (int argc, char * argv[]) {
 
-    /*Hello world from core 0???*/
-  uint64_t marchid = read_csr(marchid);
-  const char* march = get_march(marchid);
-  printf("Hello world from core 0, a %s\n", march);
-  //输出mstatus,16进制
-    unsigned long mstatus;
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
- //设置mstatus.VS = 1，其中mstatus[10:9]为mstatus.VS
-    asm volatile ("csrw mstatus, %0" : : "r" (mstatus | (1 << 9)));
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
+
 
     // conv_2
     uint64_t start = read_cycles();

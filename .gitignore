@@ -1,5 +1,6 @@
 *.dump
 *.riscv
+*.riscv_cpu
 *.out
 **/tmp
 **/log

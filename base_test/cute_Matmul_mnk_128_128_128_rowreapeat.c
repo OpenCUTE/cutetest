@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <riscv-pk/encoding.h>
+// #include <riscv-pk/encoding.h>
 // #include <riscv-pk/marchid.h>
 #include "marchid.h"
 #include <stdint.h>
@@ -7,18 +7,7 @@
 #include "matmul_value_mnk_128_128_128_rowreapeat.h"
 
 int main(void) {
-    /*Hello world from core 0???*/
-  uint64_t marchid = read_csr(marchid);
-  const char* march = get_march(marchid);
-  printf("Hello world from core 0, a %s\n", march);
-  //输出mstatus,16进制
-    unsigned long mstatus;
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
- //设置mstatus.VS = 1，其中mstatus[10:9]为mstatus.VS
-    asm volatile ("csrw mstatus, %0" : : "r" (mstatus | (1 << 9)));
-    asm volatile ("csrr %0, mstatus" : "=r" (mstatus));
-    printf("%lx\n", mstatus);
+
 
     uint64_t res1 = 1;
     // uint64_t A = input;
