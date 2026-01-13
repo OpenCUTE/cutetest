@@ -60,6 +60,22 @@
 #define CUTE_FIFO_FINISH_SEARCH_FUNCTOPS (CUTE_SEARCH_FUNCTOPS + 6)
 #define CUTE_FIFO_FULL_SEARCH_FUNCTOPS (CUTE_SEARCH_FUNCTOPS + 7)
 #define CUTE_FIFO_VALID_SEARCH_FUNCTOPS (CUTE_SEARCH_FUNCTOPS + 8)
+#define CUTE_FIFO_INST_NUM_SEARCH_FUNCTOPS (CUTE_SEARCH_FUNCTOPS + 9)
+
+#define CUTE_READ_CSR 32
+#define CUTE_READ_ATENSOR_CONFIG_FUNCTOPS_0 (CUTE_READ_CSR + 1)
+#define CUTE_READ_ATENSOR_CONFIG_FUNCTOPS_1 (CUTE_READ_CSR + 2)
+#define CUTE_READ_BTENSOR_CONFIG_FUNCTOPS_0 (CUTE_READ_CSR + 3)
+#define CUTE_READ_BTENSOR_CONFIG_FUNCTOPS_1 (CUTE_READ_CSR + 4)
+#define CUTE_READ_CTENSOR_CONFIG_FUNCTOPS_0 (CUTE_READ_CSR + 5)
+#define CUTE_READ_CTENSOR_CONFIG_FUNCTOPS_1 (CUTE_READ_CSR + 6)
+#define CUTE_READ_DTENSOR_CONFIG_FUNCTOPS_0 (CUTE_READ_CSR + 7)
+#define CUTE_READ_DTENSOR_CONFIG_FUNCTOPS_1 (CUTE_READ_CSR + 8)
+
+#define CUTE_READ_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS_0 (CUTE_READ_CSR + 9)
+#define CUTE_READ_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS_1 (CUTE_READ_CSR + 10)
+#define CUTE_READ_CONV_CONFIG_FUNCTOPS_0 (CUTE_READ_CSR + 11)
+#define CUTE_READ_CONV_CONFIG_FUNCTOPS_1 (CUTE_READ_CSR + 12)
 
 uint64_t mrdcycle()
 {
@@ -187,6 +203,13 @@ uint64_t cute_marco_inst_fifo_valid_search()
     return res1;
 }
 
+uint64_t cute_marco_inst_fifo_inst_num_search()
+{
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_FIFO_INST_NUM_SEARCH_FUNCTOPS);
+    return res1;
+}
+
 uint64_t cute_marco_inst_fifo_full_search()
 {
     uint64_t res1=1;
@@ -219,5 +242,77 @@ uint64_t cute_marco_inst_tma_test()
 {
     uint64_t res1=1;
     YGJK_INS_CUSTOM1_RRR(res1, 0, 0, 0);
+    return res1;
+}
+
+uint64_t cute_Atensor_config_0_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_ATENSOR_CONFIG_FUNCTOPS_0);
+    return res1;
+}
+
+uint64_t cute_Atensor_config_1_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_ATENSOR_CONFIG_FUNCTOPS_1);
+    return res1;
+}
+
+uint64_t cute_Btensor_config_0_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_BTENSOR_CONFIG_FUNCTOPS_0);
+    return res1;
+}
+
+uint64_t cute_Btensor_config_1_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_BTENSOR_CONFIG_FUNCTOPS_1);
+    return res1;
+}
+
+uint64_t cute_Ctensor_config_0_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_CTENSOR_CONFIG_FUNCTOPS_0);
+    return res1;
+}
+
+uint64_t cute_Ctensor_config_1_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_CTENSOR_CONFIG_FUNCTOPS_1);
+    return res1;
+}
+
+uint64_t cute_Dtensor_config_0_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_DTENSOR_CONFIG_FUNCTOPS_0);
+    return res1;
+}
+
+uint64_t cute_Dtensor_config_1_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_DTENSOR_CONFIG_FUNCTOPS_1);
+    return res1;
+}
+
+uint64_t cute_MNK_kernalstride_config_0_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS_0);
+    return res1;
+}
+
+uint64_t cute_MNK_kernalstride_config_1_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS_1);
+    return res1;
+}
+
+uint64_t cute_conv_config_0_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_CONV_CONFIG_FUNCTOPS_0);
+    return res1;
+}
+
+uint64_t cute_conv_config_1_search(){
+    uint64_t res1=1;
+    YGJK_SEARCH_RXX(res1, CUTE_READ_CONV_CONFIG_FUNCTOPS_1);
     return res1;
 }

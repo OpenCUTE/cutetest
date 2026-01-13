@@ -78,14 +78,27 @@ do{                                                           \
         "sd t2,  -8(sp)\n\t"                                    \
         "add t1, zero, %1\n\t"                                  \
         "add t2, zero, %2\n\t"                                  \
-        ".word " GET_VALUE(YGJK_BIT(CUSTOM0,5,1,1,1,6,7,fun)) "\n\t"              \
+        ".word " GET_VALUE(YGJK_BIT(CUSTOM0,5,1,1,1,6,7,fun)) "\n\t" \
         "add %0, zero, t0\n\t"                                  \
         "ld t0, -24(sp)\n\t"                                    \
         "ld t1, -16(sp)\n\t"                                    \
         "ld t2,  -8(sp)\n\t"                                    \
         :"=r"(rd)                                           \
         :"r" (rs1) , "r" (rs2)                              \
-        :"t0","t1","t2","memory"                                     \
+        :"t0","t1","t2","memory"                            \
+        );                                                  \
+}
+
+#define YGJK_SEARCH_RXX(rd, fun)                      \ 
+{                                                           \
+    __asm__ __volatile__ (                                  \
+        "sd t0, -8(sp)\n\t"                                 \      
+        ".word " GET_VALUE(YGJK_BIT(CUSTOM0,5,0,0,1,0,0,fun)) "\n\t" \
+        "add %0, zero, t0\n\t"                                  \
+        "ld t0, -8(sp)\n\t"                                    \
+        :"=r"(rd)                                           \
+        :                                                   \
+        :"t0","memory"                                     \
         );                                                  \
 }
 
