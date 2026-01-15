@@ -956,9 +956,10 @@ void CUTE_TASK_END(uint64_t task_id)
     //等待任务结束
     uint64_t finish_tag = 1 << task_id;
     uint64_t res1 = cute_marco_inst_fifo_finish_search();
+    printf("Task ID = %d, finish_tag = %lx, res1 = %lx\n",task_id,finish_tag,res1);
     while(!(res1&finish_tag))
     {
-        // printf("Waiting for finish task_id = %d\n",task_id);
+    //    printf("Waiting for finish task_id = %d\n",task_id);
         res1 = cute_marco_inst_fifo_finish_search();
     }
     cute_marco_inst_fifo_dequeue();
@@ -1027,7 +1028,7 @@ static void matmul_cute(bool transA, bool transB, size_t DIM_I, size_t DIM_J, si
       break;
   }
   
-  // printf("!!\n[matmul_cute] START!!\n!!\n");
+//  printf("!!\n[matmul_cute] START!!\n!!\n");
   if(act != LAYERNORM && act != SOFTMAX)
   {
     int Tile_I = DIM_I / 64;
@@ -1070,7 +1071,7 @@ static void matmul_cute(bool transA, bool transB, size_t DIM_I, size_t DIM_J, si
     // MATMUL_MARCO_ISSUE();
     wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C,
                 Application_M, Application_N, Application_K, 1, bias_type, Is_Transpose, 0);
-
+//    printf("CUTE Task ISSUE\n");
     int i = 0;
     int j = 1;
     int pre_i = 0;
@@ -1089,8 +1090,9 @@ static void matmul_cute(bool transA, bool transB, size_t DIM_I, size_t DIM_J, si
         //     */
         //    //假查询
         // }
+      
         MATMUL_MARCO_SEARCH();
-
+      //  printf("CUTE Task SEARCH\n");
         CUTE_TASK_END(wait_after_operation_cute_task_id_pre);
         // exit(0);
 
@@ -1164,14 +1166,16 @@ static void matmul_cute(bool transA, bool transB, size_t DIM_I, size_t DIM_J, si
     cute 指令发射
     */
    MATMUL_MARCO_ISSUE();
+   //printf("else CUTE Task ISSUE\n");
    wait_after_operation_cute_task_id_pre = issue_cute_matmul_marco_inst(Tile_A, Application_stride_A, Tile_B, Application_stride_B, Tile_D, Application_stride_D, Tile_C, Application_stride_C,
                 Application_M, Application_N, Application_K, 1, bias_type, Is_Transpose, 0);
-
+   //printf("else CUTE Task ISSUE done\n");
     int i = 1;
     int pre_i = 0;
 
     int acc_not_finish = 1;
     volatile int acc_finish = 0;
+    //printf("Tile_I:%d\n",Tile_I);
     for (i=1;i<Tile_I;i++)
     {
         //等待CUTE任务完成
@@ -1182,8 +1186,9 @@ static void matmul_cute(bool transA, bool transB, size_t DIM_I, size_t DIM_J, si
         //     */
         //    //假查询
         // }
+        //printf("else CUTE Task SEARCH\n");
         MATMUL_MARCO_SEARCH();
-
+        //printf("else CUTE Task SEARCH done\n");
         CUTE_TASK_END(wait_after_operation_cute_task_id_pre);
 
         // printf("[CUTE]Matrix Multi Task Finish,Tile %d,Tile Size : 64*%d*%d\n",i,DIM_J,DIM_K);
@@ -1370,6 +1375,7 @@ uint64_t encoder_decoder(
 
     uint64_t start = read_cycles();
 
+    // printf("[Self Attention!]\n");
     attention(hidden_dim, expansion_dim, num_heads, seq_len, compression_factor,
         input, input,
         out, resadd1_buf,
@@ -1378,6 +1384,7 @@ uint64_t encoder_decoder(
         attn_buf, out_buf);
 
     if (!is_encoder) {
+        // printf("[Cross Attention!]\n");
         attention(hidden_dim, expansion_dim, cross_num_heads, seq_len, compression_factor,
             resadd1_buf, enc_out,
             out, resadd2_buf,

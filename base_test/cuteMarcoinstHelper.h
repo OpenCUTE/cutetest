@@ -47,6 +47,7 @@
 
 #define CUTE_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 5)
 #define CUTE_CONV_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 6)
+#define CUTE_FINISH_UNCHECK_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 7)
 #define CUTE_FIFO_DEQUEUE_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 16)
 #define CUTE_FIFO_GET_FINISH_TAIL_FIFOINDEX_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 17)
 
@@ -104,6 +105,12 @@ void issue_cute_config_DTensor(uint64_t DTensor_Base_Addr,uint64_t DTensor_M_Str
     int result;
     YGJK_INS_RRR(result, DTensor_Base_Addr, DTensor_M_Stride, CUTE_DTENSOR_CONFIG_FUNCTOPS);
 }
+void issue_cute_config_Finish_uncheck(uint64_t finish_uncheck)
+{
+    int result;
+    YGJK_INS_RRR(result, finish_uncheck, 0, CUTE_FINISH_UNCHECK_CONFIG_FUNCTOPS);
+}
+
 
 //数值范围检测M N K,16384
 void issue_cute_config_MNK_KERNALSTRIDE(uint64_t M,uint64_t N,uint64_t K,uint64_t kernel_stride)

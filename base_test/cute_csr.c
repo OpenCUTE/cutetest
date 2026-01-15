@@ -103,8 +103,8 @@ int main(void) {
     printf("FIFO instruction number: %ld\n", res1);
     while(res1)
     {
-        res1 = cute_marco_inst_fifo_valid_search();
-        printf("FIFO valid search result: %ld   ", res1);
+        res1 = cute_marco_inst_fifo_finish_search();
+        printf("FIFO finish search result: %ld   ", res1);
         res1 = cute_marco_inst_fifo_inst_num_search();
         printf("FIFO instruction number: %ld\n", res1);
     }

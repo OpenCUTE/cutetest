@@ -61,10 +61,15 @@ int main(void) {
 
     printf("D Test start\n");
     res1 = cute_marco_inst_fifo_finish_search();
-    while(!res1)
+    res1 = cute_marco_inst_fifo_inst_num_search();
+    printf("FIFO instruction number: %ld\n", res1);
+    while(res1)
     {
-        // printf("Waiting for finish\n");
+        printf("Waiting for finish\n");
         res1 = cute_marco_inst_fifo_finish_search();
+        printf("FIFO finish search result: %ld   ", res1);
+        res1 = cute_marco_inst_fifo_inst_num_search();
+        printf("FIFO instruction number: %ld\n", res1);
     }
     uint64_t end_cycle = mrdcycle();
     printf("finish\n");

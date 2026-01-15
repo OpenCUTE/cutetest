@@ -24,7 +24,7 @@ int main(void) {
     uint64_t current_M_index = 0;
     uint64_t issue_val = issue_cute_matmul_marco_inst(a, A_Stride, b, B_Stride, d, D_Stride, c, C_Stride, APPLICATION_M, APPLICATION_N, APPLICATION_K, element_type, bias_type,0,0);
 
-    printf("issue_val: %ld\n", issue_val);
+ //   printf("issue_val: %ld\n", issue_val);
     //查询指令FIFO的情况
     res1 = cute_marco_inst_fifo_valid_search();
     if(res1){
