@@ -23,6 +23,11 @@
 #define CUTEDataTypeU8I8I32     5     //U8 * I8 * I32
 #define CUTEDataTypeU8U8I32     6     //U8 * U8 * I32
 #define CUTEDataTypee4m3F32     7
+#define CUTEDataTypee5m2F32     8
+#define CUTEDataTypenvfp4F32    9
+#define CUTEDataTypemxfp4F32    10
+#define CUTEDataTypefp8e4m3F32  11
+#define CUTEDataTypefp8e5m2F32  12
 
 
 // int issue_Matmul_Marco_Inst()
@@ -44,6 +49,9 @@
 #define CUTE_BTENSOR_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 2)
 #define CUTE_CTENSOR_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 3)
 #define CUTE_DTENSOR_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 4)
+
+#define CUTE_ASCALE_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 7)
+#define CUTE_BSCALE_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 8) 
 
 #define CUTE_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 5)
 #define CUTE_CONV_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 6)
@@ -78,6 +86,16 @@ void issue_cute_config_BTensor(uint64_t BTensor_Base_Addr,uint64_t BTensor_M_Str
     int result;
     YGJK_INS_RRR(result, BTensor_Base_Addr, BTensor_M_Stride, CUTE_BTENSOR_CONFIG_FUNCTOPS);
 }
+void issue_cute_config_AScale(uint64_t AScale_Base_Addr)
+{
+    int result;
+    YGJK_INS_RRR(result, AScale_Base_Addr, 0, CUTE_ASCALE_CONFIG_FUNCTOPS);
+}
+void issue_cute_config_BScale(uint64_t BScale_Base_Addr)
+{
+    int result;
+    YGJK_INS_RRR(result, BScale_Base_Addr, 0, CUTE_BSCALE_CONFIG_FUNCTOPS);
+}
 void issue_cute_config_CTensor(uint64_t CTensor_Base_Addr,uint64_t CTensor_M_Stride)
 {
     int result;
@@ -92,18 +110,16 @@ void issue_cute_config_DTensor(uint64_t DTensor_Base_Addr,uint64_t DTensor_M_Str
 //数值范围检测M N K,16384
 void issue_cute_config_MNK_KERNALSTRIDE(uint64_t M,uint64_t N,uint64_t K,uint64_t kernel_stride)
 {
-    int t;
     M = M & 0xFFFF;
     N = N & 0xFFFF;
     K = K & 0xFFFF;
     uint64_t cfgData1 = M | (N << 20) | (K << 40);
-    YGJK_INS_RRR(t, cfgData1, kernel_stride, CUTE_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS);
+    YGJK_INS_XRR(0, cfgData1, kernel_stride, CUTE_MNK_KERNALSTRIDE_CONFIG_FUNCTOPS);
 }
 
 void issue_cute_config_CONV(uint64_t element_type,uint64_t bias_type,uint64_t transpose_result,uint64_t conv_stride,uint64_t conv_oh_max,uint64_t conv_ow_max,
                                     uint64_t kernel_size,uint64_t conv_oh_per_add,uint64_t conv_ow_per_add,uint64_t conv_oh_index,uint64_t conv_ow_index)
 {
-    int t;
     element_type = element_type & 0xFF;
     bias_type = bias_type & 0xFF;
     transpose_result = transpose_result & 0xFF;
@@ -117,12 +133,11 @@ void issue_cute_config_CONV(uint64_t element_type,uint64_t bias_type,uint64_t tr
     conv_ow_index = conv_ow_index & 0x7FFF;
     uint64_t cfgData1 = element_type | (bias_type << 8) | (transpose_result << 16) | (conv_stride << 24) | (conv_oh_max << 32) | (conv_ow_max << 48);
     uint64_t cfgData2 = kernel_size  | (conv_oh_per_add << 4) | (conv_ow_per_add << 19) | (conv_oh_index << 34) | (conv_ow_index << 49);
-    YGJK_INS_RRR(t, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
+    YGJK_INS_XRR(0, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
 }
 
 void issue_cute_config_MatMul(uint64_t element_type,uint64_t bias_type,uint64_t transpose_result,uint64_t current_M_index)
 {
-    int t;
     element_type = element_type & 0xFF;
     bias_type = bias_type & 0xFF;
     transpose_result = transpose_result & 0xFF;
@@ -136,7 +151,7 @@ void issue_cute_config_MatMul(uint64_t element_type,uint64_t bias_type,uint64_t 
     uint64_t conv_ow_index = current_M_index;
     uint64_t cfgData1 = element_type | (bias_type << 8) | (transpose_result << 16) | (conv_stride << 24) | (conv_oh_max << 32) | (conv_ow_max << 48);
     uint64_t cfgData2 = kernel_size  | (conv_oh_per_add << 4) | (conv_ow_per_add << 19) | (conv_oh_index << 34) | (conv_ow_index << 49);
-    YGJK_INS_RRR(t, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
+    YGJK_INS_XRR(0, cfgData1, cfgData2, CUTE_CONV_CONFIG_FUNCTOPS);
 }
 
 uint64_t issue_cute_marco_inst()
@@ -173,6 +188,25 @@ uint64_t  issue_cute_matmul_marco_inst(uint64_t ATensor_Base_Addr,uint64_t ATens
 {
     issue_cute_config_ATensor(ATensor_Base_Addr,ATensor_M_Stride);
     issue_cute_config_BTensor(BTensor_Base_Addr,BTensor_M_Stride);
+    issue_cute_config_CTensor(BiasTensor_Base_Addr,BiasTensor_M_Stride);
+    issue_cute_config_DTensor(CTensor_Base_Addr,CTensor_M_Stride);
+    issue_cute_config_MNK_KERNALSTRIDE(M,N,K,0);
+    issue_cute_config_MatMul(element_type,bias_type,transpose_result,matmul_m_index);
+    return issue_cute_marco_inst();
+}
+
+uint64_t issue_cute_blockscale_matmul_macro_inst(uint64_t ATensor_Base_Addr,uint64_t ATensor_M_Stride,
+                                       uint64_t BTensor_Base_Addr,uint64_t BTensor_M_Stride,
+                                       uint64_t AScale_Base_Addr, uint64_t BScale_Base_Addr,
+                                       uint64_t BiasTensor_Base_Addr,uint64_t BiasTensor_M_Stride,
+                                       uint64_t CTensor_Base_Addr,uint64_t CTensor_M_Stride,
+                                       uint64_t M,uint64_t N,uint64_t K,
+                                       uint64_t element_type,uint64_t bias_type,uint64_t transpose_result,uint64_t matmul_m_index)
+{
+    issue_cute_config_ATensor(ATensor_Base_Addr,ATensor_M_Stride);
+    issue_cute_config_BTensor(BTensor_Base_Addr,BTensor_M_Stride);
+    issue_cute_config_AScale(AScale_Base_Addr);
+    issue_cute_config_BScale(BScale_Base_Addr);
     issue_cute_config_CTensor(BiasTensor_Base_Addr,BiasTensor_M_Stride);
     issue_cute_config_DTensor(CTensor_Base_Addr,CTensor_M_Stride);
     issue_cute_config_MNK_KERNALSTRIDE(M,N,K,0);
