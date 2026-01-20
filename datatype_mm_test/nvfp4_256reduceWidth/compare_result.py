@@ -1,15 +1,21 @@
 import numpy as np
 
-test_id = 1
+test_id = 2
+
+# 指定矩阵大小
 shape = 64 * 2**test_id
+
+# 指定bias矩阵输入类型
 bias_type = 3
 bias_type_name = ["error", "zeroinit", "rowrepeat", "fullbias"]
 
 # 输入文件名
 root_dir = "../../../chipyard/" # chipyard路径
-config="CUTEM2564TCUTEShuttle512D512V512M256S1CoreConfig"
-# config="VerifyL2DramPerformenceTest1CUTEM256Config"
-test_name = f"cute_Matmul_mxfp8_mnk_{shape}_{shape}_{shape}_{bias_type_name[bias_type]}"
+# 指定硬件配置
+config="CUTE2TopsShuttle512D512V512M512Sysbus512Membus1CoreConfigdebug"
+
+# 指定测试名称
+test_name = f"cute_Matmul_nvfp4_mnk_{shape}_{shape}_{shape}_{bias_type_name[bias_type]}"
 input_file = f"{root_dir}sims/verilator/output/chipyard.harness.TestHarness.{config}/{test_name}.out"  # 要筛选的文件
 output_file = f"./CML_Store_trace.out"  # 保存筛选结果的文件
 
@@ -44,8 +50,8 @@ def hex2sint(num, length):
     else:
         return int(binary, 2)
 
-# 读取matmul_value_mnk_512_512_2048_zeroinit_transpose.h文件的所有内容
-with open(f"./matmul_value_mxfp8_mnk_{shape}_{shape}_{shape}_{bias_type_name[bias_type]}.h", "r") as f:
+# 读取.h文件的所有内容
+with open(f"./matmul_value_nvfp4_mnk_{shape}_{shape}_{shape}_{bias_type_name[bias_type]}.h", "r") as f:
     content = f.read()
 
     data = content.split(f"static int gloden_c[{application_m}][{application_n}] __attribute__((aligned(256))) =")[1].split(";")[0]

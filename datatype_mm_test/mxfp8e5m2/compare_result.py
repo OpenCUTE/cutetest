@@ -6,7 +6,7 @@ bias_type = 3
 bias_type_name = ["error", "zeroinit", "rowrepeat", "fullbias"]
 
 # 输入文件名
-root_dir = "../../../../../" # chipyard路径
+root_dir = "../../../chipyard/" # chipyard路径
 config="CUTEM2564TCUTEShuttle512D512V512M256S1CoreConfig"
 # config="VerifyL2DramPerformenceTest1CUTEM256Config"
 test_name = f"cute_Matmul_mxfp8_mnk_{shape}_{shape}_{shape}_{bias_type_name[bias_type]}"
