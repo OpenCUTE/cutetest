@@ -50,7 +50,7 @@
 #define CUTE_FINISH_UNCHECK_CONFIG_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 7)
 #define CUTE_FIFO_DEQUEUE_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 16)
 #define CUTE_FIFO_GET_FINISH_TAIL_FIFOINDEX_FUNCTOPS (CUTE_CONFIG_FUNCTOPS + 17)
-#define CUTE_CONFIG_MMU_USEVM_FLUSH (CUTE_CONFIG_FUNCTOPS + 18)
+#define CUTE_CONFIG_MMU_FLUSH_USINGVM (CUTE_CONFIG_FUNCTOPS + 18)
 
 #define CUTE_SEARCH_FUNCTOPS 0
 #define CUTE_IS_RUNNING_SEARCH_FUNCTOPS (CUTE_SEARCH_FUNCTOPS + 1)
@@ -246,11 +246,11 @@ uint64_t cute_marco_inst_fifo_get_finish_tail_fifoindex()
     return res1;
 }
 
-uint64_t cute_marco_inst_mmu_usevm_flush()
+uint64_t cute_marco_inst_mmu_flush_usingVM(uint64_t flush, uint64_t usingVM)
 {
     //第一个参数是flush，第二个是usingVM
     uint64_t res1=1;
-    YGJK_INS_RRR(res1, 0, 0, CUTE_CONFIG_MMU_USEVM_FLUSH);
+    YGJK_INS_RRR(res1, flush, usingVM, CUTE_CONFIG_MMU_FLUSH_USINGVM);
     return res1;
 }
 
