@@ -1,13 +1,13 @@
 import numpy as np
 
-test_id = 1
+test_id = 2
 shape = 64 * 2**test_id
 bias_type = 3
 bias_type_name = ["error", "zeroinit", "rowrepeat", "fullbias"]
 
 # 输入文件名
 root_dir = "../../../chipyard/" # chipyard路径
-config="CUTEM2564TCUTEShuttle512D512V512M256S1CoreConfig"
+config="CUTE2TopsShuttle512D512V512M512Sysbus512Membus1CoreConfigdebug"
 # config="VerifyL2DramPerformenceTest1CUTEM256Config"
 test_name = f"cute_Matmul_mxfp8_mnk_{shape}_{shape}_{shape}_{bias_type_name[bias_type]}"
 input_file = f"{root_dir}sims/verilator/output/chipyard.harness.TestHarness.{config}/{test_name}.out"  # 要筛选的文件

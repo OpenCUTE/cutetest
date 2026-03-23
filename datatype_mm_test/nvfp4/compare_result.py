@@ -10,9 +10,9 @@ bias_type = 3
 bias_type_name = ["error", "zeroinit", "rowrepeat", "fullbias"]
 
 # 输入文件名
-root_dir = "../../../../../" # chipyard路径
+root_dir = "../../../chipyard/" # chipyard路径
 # 指定硬件配置
-config="CUTEM2564TCUTEShuttle512D512V512M256S1CoreConfig"
+config="CUTE4TopsShuttle512D512V512M512Sysbus512Membus1CoreConfigdebug"
 
 # 指定测试名称
 test_name = f"cute_Matmul_nvfp4_mnk_{shape}_{shape}_{shape}_{bias_type_name[bias_type]}"
